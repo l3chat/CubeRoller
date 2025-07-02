@@ -1,0 +1,265 @@
+<!DOCTYPE html>  
+<html lang="ru">  
+<head>  
+    <meta charset="UTF-8">  
+    <title>Кантование куба с ориентацией</title>  
+    <style>  
+        body { margin: 0; overflow: hidden; background: #222; }  
+        #controls {  
+            position: absolute;  
+            top: 10px;  
+            right: 10px;  
+            display: flex;  
+            flex-direction: column;  
+            gap: 8px;  
+            background: rgba(34,34,34,0.8);  
+            padding: 10px;  
+            border-radius: 8px;  
+        }  
+        button {  
+            padding: 8px 16px;  
+            font-size: 16px;  
+            cursor: pointer;  
+            border: none;  
+            background: #3498db;  
+            color: white;  
+            border-radius: 6px;  
+            transition: background 0.3s;  
+        }  
+        button:hover {  
+            background: #2980b9;  
+        }  
+        #info {  
+            color: white;  
+            font-family: sans-serif;  
+            font-size: 14px;  
+            margin-top: 10px;  
+        }  
+    </style>  
+</head>  
+<body>  
+  
+<div id="controls">  
+    <button onclick="roll('up')">Вверх</button>  
+    <button onclick="roll('down')">Вниз</button>  
+    <button onclick="roll('left')">Влево</button>  
+    <button onclick="roll('right')">Вправо</button>  
+    <button onclick="restart()">Restart</button>  
+    <label style="color:white;">
+      Размер поля: 
+      <input type="number" id="gridSizeInput" value="5" min="1" max="20" style="width:50px;">
+    </label>
+    <button onclick="applyGridSize()">Применить</button>
+    <div id="info"></div>  
+</div>  
+  
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>  
+<script>  
+
+let gridSize = 3; // Размер поля по умолчанию (3x3)
+
+// === Создание текстур с цифрами ===  
+function createNumberTexture(number) {  
+    const size = 256;  
+    const canvas = document.createElement('canvas');  
+    canvas.width = size;  
+    canvas.height = size;  
+    const ctx = canvas.getContext('2d');  
+  
+    ctx.clearRect(0, 0, size, size);  
+  
+    ctx.strokeStyle = 'white';  
+    ctx.lineWidth = 8;  
+    ctx.strokeRect(0, 0, size, size);  
+  
+    ctx.fillStyle = 'white';  
+    ctx.font = 'bold 180px sans-serif';  
+    ctx.textAlign = 'center';  
+    ctx.textBaseline = 'middle';  
+    ctx.fillText(number.toString(), size / 2, size / 2);  
+  
+    const texture = new THREE.CanvasTexture(canvas);  
+    return texture;  
+}  
+  
+// Сцена, камера, рендер  
+const scene = new THREE.Scene();  
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);  
+const renderer = new THREE.WebGLRenderer({antialias: true});  
+renderer.setSize(window.innerWidth, window.innerHeight);  
+document.body.appendChild(renderer.domElement);  
+  
+// Освещение  
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));  
+const directional = new THREE.DirectionalLight(0xffffff, 0.8);  
+directional.position.set(5, 10, 7);  
+scene.add(directional);  
+  
+// Сетка  
+let grid = new THREE.GridHelper(gridSize, gridSize, 0x888888, 0x444444); 
+grid.position.y = -0.01;
+scene.add(grid);  
+
+function centerCamera() {
+    const distance = gridSize * 1.2;
+    camera.position.set(-distance/2, distance * 0.8, distance);
+    camera.lookAt(0, 0, 0);
+}
+centerCamera();
+
+// === Куб с цифрами и прозрачностью ===  
+const cubeSize = 1;  
+
+const numberMap = [3, 4, 1, 6, 2, 5]; // по порядку сторон в BoxGeometry  
+const materials = numberMap.map(n => new THREE.MeshPhongMaterial({  
+    map: createNumberTexture(n),  
+    transparent: false, //true,
+    opacity: 0.5  
+}));  
+  
+const angle = Math.PI / 2;  
+const speed = 0.07;  
+  
+const cube = new THREE.Mesh(  
+    new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize),  
+    materials  
+);  
+  
+let cubeshift = (gridSize%2==0) ? 0.5 : 0;
+cube.position.set(cubeshift, 0.5, cubeshift);  
+scene.add(cube);  
+  
+// Переменные состояния  
+let isRotating = false;  
+  
+const worldQuat = new THREE.Quaternion();  
+  
+// === Функция кантования ===  
+function roll(direction) {  
+    if (isRotating) return;  
+  
+    const axis = new THREE.Vector3();  
+    const pivot = new THREE.Object3D();  
+  
+    let pivotX = cube.position.x - 0.5;  
+    let pivotZ = cube.position.z - 0.5;  
+  
+    if (direction === 'up') {  
+        axis.set(-1, 0, 0);  
+        if(Math.abs(pivotZ) > (gridSize-1)/2.){ return;}
+    }  
+    if (direction === 'down') {  
+        axis.set(1, 0, 0);  
+        pivotZ += 1;  
+        if(Math.abs(pivotZ) > (gridSize-1)/2.){ return;}
+    }  
+    if (direction === 'left') {  
+        axis.set(0, 0, 1);  
+        if(Math.abs(pivotX) > (gridSize-1)/2.){ return;}
+    }  
+    if (direction === 'right') {  
+        axis.set(0, 0, -1);  
+        pivotX += 1;  
+        if(Math.abs(pivotX) > (gridSize-1)/2.){ return;}
+    }  
+  
+    scene.remove(cube);  
+  
+    pivot.position.set(pivotX, 0, pivotZ);  
+    pivot.rotation.set(0,0,0);  
+    scene.add(pivot);  
+    pivot.add(cube);  
+  
+    const dx = (direction === 'left') ? 0 : (direction === 'right') ? -1 : 0;  
+    const dz = (direction === 'up') ? 0 : (direction === 'down') ? -1 : 0;  
+    cube.position.set(0.5 + dx, 0.5, 0.5 + dz);  
+  
+    isRotating = true;  
+    let rotated = 0;  
+    function animateRotation() {  
+        const step = Math.min(speed, angle - rotated);  
+        pivot.rotateOnAxis(axis, step);  
+        rotated += step;  
+        if (rotated < angle) {  
+            requestAnimationFrame(animateRotation);  
+        } else {  
+            cube.updateMatrixWorld(true);  
+            cube.getWorldQuaternion(worldQuat);  
+  
+            pivot.remove(cube);  
+            scene.remove(pivot);  
+  
+            scene.add(cube);  
+            cube.quaternion.copy(worldQuat);  
+  
+            const dx = (direction === 'left') ? -1 : (direction === 'right') ? 0 : 0;  
+            const dz = (direction === 'up') ? -1 : (direction === 'down') ? 0 : 0;  
+            cube.position.set(pivotX + 0.5 + dx, 0.5, pivotZ + 0.5 + dz);  
+  
+            isRotating = false;   
+        }  
+    }  
+    animateRotation();  
+}  
+  
+// === Анимация сцены ===  
+function animate() {  
+    requestAnimationFrame(animate);  
+    renderer.render(scene, camera);  
+}  
+animate();  
+  
+// === Адаптивность окна ===  
+window.addEventListener('resize', () => {  
+    camera.aspect = window.innerWidth/window.innerHeight;  
+    camera.updateProjectionMatrix();  
+    renderer.setSize(window.innerWidth, window.innerHeight);  
+});  
+  
+// === Управление клавишами курсора ===  
+window.addEventListener('keydown', (event) => {  
+    if (event.key === 'ArrowUp') {  
+        roll('up');  
+    }  
+    if (event.key === 'ArrowDown') {  
+        roll('down');  
+    }  
+    if (event.key === 'ArrowLeft') {  
+        roll('left');  
+    }  
+    if (event.key === 'ArrowRight') {  
+        roll('right');  
+    }  
+});  
+  
+  
+function restart() {  
+    if (isRotating) return; // Не сбрасывать во время поворота  
+  
+    cubeshift = (gridSize%2==0) ? 0.5 : 0;
+    cube.position.set(cubeshift, 0.5, cubeshift);  
+    cube.rotation.set(0, 0, 0);  
+    cube.quaternion.set(0, 0, 0, 1); // Сброс quaternion, если используется  
+}  
+
+function updateGrid() {
+    scene.remove(grid);
+    grid = new THREE.GridHelper(gridSize, gridSize, 0x888888, 0x444444);
+    scene.add(grid);
+}
+
+function applyGridSize() {
+    const input = document.getElementById('gridSizeInput');
+    const value = parseInt(input.value);
+    if (!isNaN(value) && value >= 1 && value <= 20) {
+        gridSize = value;
+        updateGrid();
+        restart();
+        centerCamera();
+    }
+}
+
+</script>  
+  
+</body>  
+</html>
