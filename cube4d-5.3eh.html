@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CubeRoller 4D (GPT-5.3eh)</title>
+    <style>
+        :root {
+            --bg-0: #0e121a;
+            --bg-1: #172033;
+            --panel: rgba(10, 14, 22, 0.85);
+            --line: #7ac8ff;
+            --line-soft: #3b5f7e;
+            --text: #eaf3ff;
+            --accent: #4da6ff;
+            --accent-hover: #2e82d8;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 18% 20%, #21304b 0%, transparent 42%),
+                radial-gradient(circle at 82% 80%, #1a2840 0%, transparent 44%),
+                linear-gradient(140deg, var(--bg-0), var(--bg-1));
+            font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+        }
+
+        #panel {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: min(290px, calc(100vw - 24px));
+            display: grid;
+            gap: 8px;
+            padding: 12px;
+            border-radius: 10px;
+            background: var(--panel);
+            border: 1px solid rgba(122, 200, 255, 0.22);
+            backdrop-filter: blur(8px);
+            z-index: 2;
+        }
+
+        #panel h1 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        .rows {
+            display: grid;
+            gap: 6px;
+        }
+
+        .row {
+            display: flex;
+            gap: 6px;
+        }
+
+        button {
+            flex: 1;
+            min-height: 36px;
+            border: none;
+            border-radius: 7px;
+            color: white;
+            background: var(--accent);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            transition: background 160ms ease;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+        }
+
+        .meta {
+            display: grid;
+            gap: 8px;
+            margin-top: 2px;
+            font-size: 13px;
+        }
+
+        .meta label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        input[type="number"],
+        input[type="range"],
+        select {
+            width: 120px;
+        }
+
+        #info {
+            padding-top: 4px;
+            border-top: 1px solid rgba(122, 200, 255, 0.2);
+            font-size: 12px;
+            line-height: 1.35;
+            color: #cfe4ff;
+            white-space: pre-line;
+        }
+
+        @media (max-width: 680px) {
+            #panel {
+                left: 12px;
+                right: 12px;
+                width: auto;
+                top: auto;
+                bottom: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="panel">
+    <h1>4D Кантование Тессеракта</h1>
+
+    <div class="rows">
+        <div class="row">
+            <button data-move="left">Влево</button>
+            <button data-move="right">Вправо</button>
+        </div>
+        <div class="row">
+            <button data-move="forward">Вперед</button>
+            <button data-move="back">Назад</button>
+        </div>
+        <div class="row">
+            <button data-move="up">Вверх</button>
+            <button data-move="down">Вниз</button>
+        </div>
+        <div class="row">
+            <button id="restartBtn">Restart</button>
+        </div>
+    </div>
+
+    <div class="meta">
+        <label>
+            Размер поля
+            <input type="number" id="gridSizeInput" min="1" max="15" value="5">
+        </label>
+        <div class="row">
+            <button id="applyGridBtn">Применить</button>
+        </div>
+
+        <label>
+            4D перспектива
+            <input type="range" id="projectionInput" min="2.3" max="8" step="0.1" value="3.8">
+        </label>
+
+        <label>
+            Режим проекции
+            <select id="projectionModeInput">
+                <option value="hybrid" selected>Гибрид</option>
+                <option value="perspective">Перспектива</option>
+                <option value="orthographic">Ортографика</option>
+            </select>
+        </label>
+
+        <label>
+            Вид XW
+            <input type="range" id="viewXwInput" min="-90" max="90" step="1" value="24">
+        </label>
+
+        <label>
+            Вид YW
+            <input type="range" id="viewYwInput" min="-90" max="90" step="1" value="-18">
+        </label>
+
+        <label>
+            Вид ZW
+            <input type="range" id="viewZwInput" min="-90" max="90" step="1" value="10">
+        </label>
+    </div>
+
+    <div id="info"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+
+// This file contains a fresh 4D implementation:
+// 1) Keep a true 4D orientation matrix (x,y,z,w).
+// 2) For each roll, compute each vertex path by rotating around a 4D pivot edge.
+// 3) Project animated 4D vertices to 3D and render as tesseract wireframe.
+
+const CONFIG = {
+    cubeHalfSize: 0.5,
+    rollAngle: Math.PI / 2,
+    rollStep: 0.02,
+    minGrid: 1,
+    maxGrid: 15
+};
+
+const AXIS = {
+    X: 0,
+    Y: 1,
+    Z: 2,
+    W: 3
+};
+
+let gridSize = 5;
+let projectionDistance = 3.8;
+let projectionMode = "hybrid";
+let viewXwRad = degToRad(24);
+let viewYwRad = degToRad(-18);
+let viewZwRad = degToRad(10);
+let isRolling = false;
+
+// Orientation in 4D and center position in 3D board coordinates.
+let orientation4 = identity4();
+let center3 = { x: 0, y: 0, z: 0 };
+let viewRotation4 = buildViewRotation4();
+
+// Scene setup.
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x111827, 1);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+dirLight.position.set(7, 10, 8);
+scene.add(dirLight);
+
+let gridHelper = null;
+let boundsLines = null;
+
+function centerCamera() {
+    const dist = Math.max(7, gridSize * 1.6);
+    camera.position.set(-dist * 0.8, dist * 0.72, dist);
+    camera.lookAt(0, 0, 0);
+}
+
+function rebuildFieldHelpers() {
+    if (gridHelper) scene.remove(gridHelper);
+    if (boundsLines) scene.remove(boundsLines);
+
+    gridHelper = new THREE.GridHelper(gridSize, gridSize, 0x6ea8d9, 0x35516a);
+    gridHelper.position.y = -CONFIG.cubeHalfSize;
+    scene.add(gridHelper);
+
+    // Bounding box represents the volume where the center is allowed to move,
+    // expanded by half-cube size so the displayed shape matches visible space.
+    const box = new THREE.BoxGeometry(gridSize, gridSize, gridSize);
+    const boxEdges = new THREE.EdgesGeometry(box);
+    boundsLines = new THREE.LineSegments(
+        boxEdges,
+        new THREE.LineBasicMaterial({ color: 0x4d6b86, transparent: true, opacity: 0.65 })
+    );
+    scene.add(boundsLines);
+}
+
+centerCamera();
+rebuildFieldHelpers();
+
+// === 4D linear algebra (row-major 4x4) ===
+function identity4() {
+    return [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+    ];
+}
+
+function multiply4(a, b) {
+    const out = new Array(16).fill(0);
+    for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+            for (let k = 0; k < 4; k++) {
+                out[r * 4 + c] += a[r * 4 + k] * b[k * 4 + c];
+            }
+        }
+    }
+    return out;
+}
+
+function rotation4(a, b, theta) {
+    const out = identity4();
+    const c = Math.cos(theta);
+    const s = Math.sin(theta);
+
+    out[a * 4 + a] = c;
+    out[a * 4 + b] = -s;
+    out[b * 4 + a] = s;
+    out[b * 4 + b] = c;
+    return out;
+}
+
+function apply4(m, v) {
+    return [
+        m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3] * v[3],
+        m[4] * v[0] + m[5] * v[1] + m[6] * v[2] + m[7] * v[3],
+        m[8] * v[0] + m[9] * v[1] + m[10] * v[2] + m[11] * v[3],
+        m[12] * v[0] + m[13] * v[1] + m[14] * v[2] + m[15] * v[3]
+    ];
+}
+
+function degToRad(v) {
+    return v * Math.PI / 180;
+}
+
+function buildViewRotation4() {
+    // Rotate the full 4D scene before projection, like a camera orientation in 4D.
+    // Order matters: we compose several axis-w plane rotations.
+    let m = identity4();
+    m = multiply4(rotation4(AXIS.X, AXIS.W, viewXwRad), m);
+    m = multiply4(rotation4(AXIS.Y, AXIS.W, viewYwRad), m);
+    m = multiply4(rotation4(AXIS.Z, AXIS.W, viewZwRad), m);
+    return m;
+}
+
+function project4to3(v4, eye4) {
+    // Multiple projection options so the user can choose a readable 4D appearance.
+    // Eye tracking affects XYZ: the perspective center follows the tesseract center.
+    if (projectionMode === "orthographic") {
+        const k = 0.42;
+        const oblique = [1, 0.85, 0.65];
+        return [
+            v4[0] + v4[3] * k * oblique[0],
+            v4[1] + v4[3] * k * oblique[1],
+            v4[2] + v4[3] * k * oblique[2]
+        ];
+    }
+
+    const depthFactor = (projectionMode === "hybrid") ? 0.62 : 1.0;
+    let denom = projectionDistance - v4[3] * depthFactor;
+    if (Math.abs(denom) < 0.18) denom = (denom < 0) ? -0.18 : 0.18;
+    const scale = projectionDistance / denom;
+    return [
+        eye4[0] + (v4[0] - eye4[0]) * scale,
+        eye4[1] + (v4[1] - eye4[1]) * scale,
+        eye4[2] + (v4[2] - eye4[2]) * scale
+    ];
+}
+
+function computeCenter4(vertices4) {
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    let sw = 0;
+    const count = vertices4.length;
+    for (const v of vertices4) {
+        sx += v[0];
+        sy += v[1];
+        sz += v[2];
+        sw += v[3];
+    }
+    return [sx / count, sy / count, sz / count, sw / count];
+}
+
+// === Build tesseract model ===
+// Vertices are all combinations of +/- half-size in 4 dimensions.
+const baseVertices4 = [];
+for (const x of [-CONFIG.cubeHalfSize, CONFIG.cubeHalfSize]) {
+    for (const y of [-CONFIG.cubeHalfSize, CONFIG.cubeHalfSize]) {
+        for (const z of [-CONFIG.cubeHalfSize, CONFIG.cubeHalfSize]) {
+            for (const w of [-CONFIG.cubeHalfSize, CONFIG.cubeHalfSize]) {
+                baseVertices4.push([x, y, z, w]);
+            }
+        }
+    }
+}
+
+// Two vertices form an edge if they differ in exactly one coordinate.
+const edges = [];
+for (let i = 0; i < baseVertices4.length; i++) {
+    for (let j = i + 1; j < baseVertices4.length; j++) {
+        let differences = 0;
+        for (let k = 0; k < 4; k++) {
+            if (baseVertices4[i][k] !== baseVertices4[j][k]) differences++;
+        }
+        if (differences === 1) edges.push([i, j]);
+    }
+}
+
+const geometry = new THREE.BufferGeometry();
+const positionBuffer = new Float32Array(edges.length * 2 * 3);
+geometry.setAttribute("position", new THREE.BufferAttribute(positionBuffer, 3));
+const lineMat = new THREE.LineBasicMaterial({ color: 0x7ac8ff });
+const tesseractLines = new THREE.LineSegments(geometry, lineMat);
+scene.add(tesseractLines);
+
+function gridShift() {
+    return (gridSize % 2 === 0) ? 0.5 : 0;
+}
+
+function resetState() {
+    orientation4 = identity4();
+    const shift = gridShift();
+    center3 = { x: shift, y: shift, z: shift };
+}
+
+function buildWorldVertices(currentOrientation, currentCenter) {
+    const world = new Array(baseVertices4.length);
+    for (let i = 0; i < baseVertices4.length; i++) {
+        const rotated = apply4(currentOrientation, baseVertices4[i]);
+        world[i] = [
+            rotated[0] + currentCenter.x,
+            rotated[1] + currentCenter.y,
+            rotated[2] + currentCenter.z,
+            rotated[3]
+        ];
+    }
+    return world;
+}
+
+function updateGeometry(worldVertices) {
+    // Render either supplied animated vertices or the committed state.
+    const vertices4 = worldVertices || buildWorldVertices(orientation4, center3);
+    const center4 = computeCenter4(vertices4);
+    const eyeView4 = apply4(viewRotation4, [center4[0], center4[1], center4[2], 0]);
+
+    let write = 0;
+    for (const [ia, ib] of edges) {
+        const aView = apply4(viewRotation4, vertices4[ia]);
+        const bView = apply4(viewRotation4, vertices4[ib]);
+        const a3 = project4to3(aView, eyeView4);
+        const b3 = project4to3(bView, eyeView4);
+
+        positionBuffer[write++] = a3[0];
+        positionBuffer[write++] = a3[1];
+        positionBuffer[write++] = a3[2];
+
+        positionBuffer[write++] = b3[0];
+        positionBuffer[write++] = b3[1];
+        positionBuffer[write++] = b3[2];
+    }
+
+    geometry.attributes.position.needsUpdate = true;
+}
+
+function inBounds(p) {
+    const limit = (gridSize - 1) / 2;
+    return Math.abs(p.x) <= limit && Math.abs(p.y) <= limit && Math.abs(p.z) <= limit;
+}
+
+function axisDelta(move, axis) {
+    if (axis === AXIS.X) return move.dx;
+    if (axis === AXIS.Y) return move.dy;
+    return move.dz;
+}
+
+const moves = {
+    left: { dx: -1, dy: 0, dz: 0, axis: AXIS.X },
+    right: { dx: 1, dy: 0, dz: 0, axis: AXIS.X },
+    forward: { dx: 0, dy: 0, dz: -1, axis: AXIS.Z },
+    back: { dx: 0, dy: 0, dz: 1, axis: AXIS.Z },
+    up: { dx: 0, dy: 1, dz: 0, axis: AXIS.Y },
+    down: { dx: 0, dy: -1, dz: 0, axis: AXIS.Y }
+};
+
+function roll(moveName) {
+    if (isRolling) return;
+    const move = moves[moveName];
+    if (!move) return;
+
+    const nextCenter = {
+        x: center3.x + move.dx,
+        y: center3.y + move.dy,
+        z: center3.z + move.dz
+    };
+    if (!inBounds(nextCenter)) return;
+
+    const axis = move.axis;
+    const axisStep = axisDelta(move, axis);
+
+    // For consistent movement direction, use opposite sign in rotation angle.
+    const directionSign = -axisStep;
+
+    // Snapshot current world vertices and animate from this static start state.
+    const startWorldVertices = buildWorldVertices(orientation4, center3);
+
+    // 4D pivot edge:
+    // - lies on w = -halfSize ("supporting" hyperplane)
+    // - shifted by half-step along movement axis to touch the rolling edge
+    const pivot = [center3.x, center3.y, center3.z, -CONFIG.cubeHalfSize];
+    pivot[axis] += axisStep * CONFIG.cubeHalfSize;
+
+    isRolling = true;
+    let accumulated = 0;
+
+    function animate() {
+        const step = Math.min(CONFIG.rollStep, CONFIG.rollAngle - accumulated);
+        accumulated += step;
+
+        const frameRotation = rotation4(axis, AXIS.W, accumulated * directionSign);
+        const frameVertices = startWorldVertices.map((v) => {
+            const local = [
+                v[0] - pivot[0],
+                v[1] - pivot[1],
+                v[2] - pivot[2],
+                v[3] - pivot[3]
+            ];
+
+            const rotated = apply4(frameRotation, local);
+            return [
+                rotated[0] + pivot[0],
+                rotated[1] + pivot[1],
+                rotated[2] + pivot[2],
+                rotated[3] + pivot[3]
+            ];
+        });
+
+        updateGeometry(frameVertices);
+
+        if (accumulated < CONFIG.rollAngle) {
+            requestAnimationFrame(animate);
+            return;
+        }
+
+        // Commit final state after the animation reaches exactly 90 degrees.
+        const finalRotation = rotation4(axis, AXIS.W, CONFIG.rollAngle * directionSign);
+        orientation4 = multiply4(finalRotation, orientation4);
+        center3 = nextCenter;
+        isRolling = false;
+
+        updateGeometry();
+        updateInfo();
+    }
+
+    animate();
+}
+
+function restart() {
+    if (isRolling) return;
+    resetState();
+    updateGeometry();
+    updateInfo();
+}
+
+function applyGridSize() {
+    const input = document.getElementById("gridSizeInput");
+    const value = parseInt(input.value, 10);
+    if (Number.isNaN(value)) return;
+    if (value < CONFIG.minGrid || value > CONFIG.maxGrid) return;
+
+    gridSize = value;
+    rebuildFieldHelpers();
+    centerCamera();
+    restart();
+}
+
+function updateInfo() {
+    const el = document.getElementById("info");
+    const xwDeg = Math.round(viewXwRad * 180 / Math.PI);
+    const ywDeg = Math.round(viewYwRad * 180 / Math.PI);
+    const zwDeg = Math.round(viewZwRad * 180 / Math.PI);
+    el.textContent = [
+        `Позиция: x=${center3.x.toFixed(1)} y=${center3.y.toFixed(1)} z=${center3.z.toFixed(1)}`,
+        `Поле: ${gridSize} x ${gridSize} x ${gridSize}`,
+        `Проекция: ${projectionMode}, d=${projectionDistance.toFixed(1)}`,
+        "Глаз: eye.xyz = центр тессеракта",
+        `Вид: XW=${xwDeg}°, YW=${ywDeg}°, ZW=${zwDeg}°`,
+        "Клавиши: стрелки = x/z, R/F = y+/y-"
+    ].join("\n");
+}
+
+// UI wiring
+for (const btn of document.querySelectorAll("button[data-move]")) {
+    btn.addEventListener("click", () => roll(btn.dataset.move));
+}
+
+document.getElementById("restartBtn").addEventListener("click", restart);
+document.getElementById("applyGridBtn").addEventListener("click", applyGridSize);
+
+document.getElementById("projectionInput").addEventListener("input", (event) => {
+    projectionDistance = parseFloat(event.target.value);
+    updateGeometry();
+    updateInfo();
+});
+
+document.getElementById("projectionModeInput").addEventListener("change", (event) => {
+    projectionMode = event.target.value;
+    updateGeometry();
+    updateInfo();
+});
+
+document.getElementById("viewXwInput").addEventListener("input", (event) => {
+    viewXwRad = degToRad(parseFloat(event.target.value));
+    viewRotation4 = buildViewRotation4();
+    updateGeometry();
+    updateInfo();
+});
+
+document.getElementById("viewYwInput").addEventListener("input", (event) => {
+    viewYwRad = degToRad(parseFloat(event.target.value));
+    viewRotation4 = buildViewRotation4();
+    updateGeometry();
+    updateInfo();
+});
+
+document.getElementById("viewZwInput").addEventListener("input", (event) => {
+    viewZwRad = degToRad(parseFloat(event.target.value));
+    viewRotation4 = buildViewRotation4();
+    updateGeometry();
+    updateInfo();
+});
+
+window.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowLeft") roll("left");
+    if (event.key === "ArrowRight") roll("right");
+    if (event.key === "ArrowUp") roll("forward");
+    if (event.key === "ArrowDown") roll("back");
+    if (event.key === "r" || event.key === "R" || event.key === "PageUp") roll("up");
+    if (event.key === "f" || event.key === "F" || event.key === "PageDown") roll("down");
+});
+
+window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function renderLoop() {
+    requestAnimationFrame(renderLoop);
+    renderer.render(scene, camera);
+}
+
+resetState();
+updateGeometry();
+updateInfo();
+renderLoop();
+</script>
+</body>
+</html>

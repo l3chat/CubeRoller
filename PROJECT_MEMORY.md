@@ -1,7 +1,7 @@
 # Project Memory
 
 ## Summary
-CubeRoller is a set of single-file Three.js demos: a 3D numbered cube rolling on a grid and a 4D tesseract analog projected to 3D that rolls across a 3D grid. Both animate in 90° steps with orientation preserved.
+CubeRoller is a set of single-file Three.js demos: a 3D numbered cube roller and multiple 4D tesseract rollers projected to 3D. The 4D demos preserve orientation while moving across a bounded 3D grid.
 
 ## Current State
 - No build system or dependencies managed in-repo.
@@ -15,10 +15,14 @@ CubeRoller is a set of single-file Three.js demos: a 3D numbered cube rolling on
 - Movement constrained to grid bounds.
 - 4D tesseract projected into 3D as line segments.
 - 4D rolling via rotations in axis–w planes.
+- New 4D variant computes per-vertex trajectories around a 4D pivot edge during animation.
+- New 4D variant includes projection tuning: perspective/hybrid/orthographic modes and XW/YW/ZW view-angle controls.
+- In the new 4D variant, projection eye `x/y/z` follows the animated tesseract center during rolls.
 
 ## Project Structure
 - `cube3d.html`: Entire app (HTML, CSS, JS). Includes Three.js via CDN.
 - `cube4d.html`: 4D tesseract rolling demo (HTML, CSS, JS). Includes Three.js via CDN.
+- `cube4d-5.3eh.html`: New-from-scratch 4D tesseract roller with matrix-based orientation and per-vertex animated paths.
 - `README.md`: Basic usage and project overview.
 
 ## How To Run
@@ -33,3 +37,4 @@ CubeRoller is a set of single-file Three.js demos: a 3D numbered cube rolling on
 - Cube face numbering is defined by `numberMap` in `cube3d.html`.
 - Movement uses a pivot object for animated rolling.
 - Grid bounds are enforced before starting a rotation.
+- `cube4d-5.3eh.html` is currently the cleanest reference for 4D rolling behavior.

@@ -67,10 +67,12 @@
 let gridSize = 5;
 const cubeSize = 1;
 const angle = Math.PI / 2;
-const speed = 0.06;
+const speed = 0.02;
 const wDistance = 3.2;
 
 // === 4D math helpers ===
+// We represent 4D orientation as a 4x4 matrix in row-major order.
+// This lets us rotate the tesseract in 4D and then project the result to 3D.
 function identity4() {
     return [
         1,0,0,0,
@@ -93,6 +95,8 @@ function multiply4(a, b) {
 }
 
 function rotation4(a, b, theta) {
+    // Create a rotation matrix in the plane defined by axes a and b.
+    // Axes: 0=x, 1=y, 2=z, 3=w
     const r = identity4();
     const c = Math.cos(theta);
     const s = Math.sin(theta);
@@ -104,6 +108,7 @@ function rotation4(a, b, theta) {
 }
 
 function apply4(m, v) {
+    // Apply a 4x4 matrix to a 4D vector.
     return [
         m[0]*v[0] + m[1]*v[1] + m[2]*v[2] + m[3]*v[3],
         m[4]*v[0] + m[5]*v[1] + m[6]*v[2] + m[7]*v[3],
@@ -113,12 +118,16 @@ function apply4(m, v) {
 }
 
 function project4to3(v4) {
+    // Simple perspective projection from 4D to 3D using the w-axis.
+    // Larger w moves points "farther" and shrinks them in 3D.
     const w = v4[3];
     const factor = wDistance / (wDistance - w);
     return [v4[0] * factor, v4[1] * factor, v4[2] * factor];
 }
 
 // === Build tesseract vertices and edges ===
+// A tesseract has 16 vertices: all +/-1 combinations of (x,y,z,w).
+// We connect vertices that differ in exactly one coordinate to form edges.
 const baseVertices = [];
 for (let x of [-1, 1]) {
     for (let y of [-1, 1]) {
@@ -142,6 +151,7 @@ for (let i = 0; i < baseVertices.length; i++) {
 }
 
 // === Three.js scene ===
+// Standard Three.js setup: scene, camera, renderer, lights, and a grid.
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -161,6 +171,7 @@ const axes = new THREE.AxesHelper(2);
 scene.add(axes);
 
 function centerCamera() {
+    // Position camera so the entire grid is visible.
     const distance = gridSize * 1.4;
     camera.position.set(-distance * 0.7, distance * 0.8, distance);
     camera.lookAt(0, 0, 0);
@@ -168,6 +179,8 @@ function centerCamera() {
 centerCamera();
 
 // === Tesseract line geometry ===
+// We render the tesseract as a line segment per edge.
+// The buffer is updated each frame (or on rotation steps).
 const geometry = new THREE.BufferGeometry();
 const positions = new Float32Array(edges.length * 2 * 3);
 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -180,20 +193,28 @@ let rotation4d = identity4();
 let position3d = { x: 0, y: 0, z: 0 };
 
 function gridShift() {
+    // Align start position to grid center, supporting even-sized grids.
     return (gridSize % 2 === 0) ? 0.5 : 0;
 }
 
 function setStartPosition() {
+    // Start at the center of the grid.
     const shift = gridShift();
     position3d = { x: shift, y: shift, z: shift };
 }
 setStartPosition();
 
-function updateGeometry() {
+function updateGeometry(optionalVertices4d) {
+    // For each edge, project 4D vertices to 3D and update the line buffer.
+    // If optionalVertices4d is provided, use it directly (e.g., during animation).
     let idx = 0;
     for (const [a, b] of edges) {
-        const va = apply4(rotation4d, baseVertices[a]);
-        const vb = apply4(rotation4d, baseVertices[b]);
+        const va = optionalVertices4d
+            ? optionalVertices4d[a]
+            : apply4(rotation4d, baseVertices[a]);
+        const vb = optionalVertices4d
+            ? optionalVertices4d[b]
+            : apply4(rotation4d, baseVertices[b]);
 
         const pa = project4to3([va[0] + position3d.x, va[1] + position3d.y, va[2] + position3d.z, va[3]]);
         const pb = project4to3([vb[0] + position3d.x, vb[1] + position3d.y, vb[2] + position3d.z, vb[3]]);
@@ -209,6 +230,7 @@ function updateGeometry() {
 }
 
 function updateInfo() {
+    // Show current 3D position in the UI.
     const info = document.getElementById('info');
     info.textContent = `Позиция: x=${position3d.x.toFixed(1)} y=${position3d.y.toFixed(1)} z=${position3d.z.toFixed(1)}`;
 }
@@ -217,11 +239,14 @@ updateGeometry();
 updateInfo();
 
 function withinBounds(next) {
+    // Keep the object inside the grid boundaries.
     const half = (gridSize - 1) / 2;
     return Math.abs(next.x) <= half && Math.abs(next.y) <= half && Math.abs(next.z) <= half;
 }
 
 function roll(direction) {
+    // A "roll" moves in 3D (x/y/z), but rotates in the plane (axis, w)
+    // to preserve 4D orientation consistency, analogous to a cube roll.
     if (isRotating) return;
 
     const next = { ...position3d };
@@ -238,18 +263,44 @@ function roll(direction) {
 
     if (!withinBounds(next)) return;
 
+    // Flip rotation direction to use the opposite plane orientation.
+    dir = -dir;
+
+    // Precompute world-space 4D vertices at the start of the roll.
+    const startVertices = baseVertices.map(v => {
+        const r = apply4(rotation4d, v);
+        return [r[0] + position3d.x, r[1] + position3d.y, r[2] + position3d.z, r[3]];
+    });
+
+    // Pivot in 4D: rotate around the edge touching the ground (w = -0.5).
+    // This mirrors cube rolling in (axisA, height) plane.
+    const pivot = [position3d.x, position3d.y, position3d.z, -0.5];
+    pivot[axisA] += dir * 0.5;
+
     isRotating = true;
     let rotated = 0;
 
     function animateRotation() {
+        // Incrementally rotate by small steps to animate the roll.
         const step = Math.min(speed, angle - rotated);
-        const rot = rotation4(axisA, axisB, step * dir);
-        rotation4d = multiply4(rot, rotation4d);
         rotated += step;
-        updateGeometry();
+
+        // Calculate the path for each vertex by rotating around the 4D pivot.
+        const rot = rotation4(axisA, axisB, rotated * dir);
+        const animatedVertices = startVertices.map(v => {
+            const shifted = [v[0] - pivot[0], v[1] - pivot[1], v[2] - pivot[2], v[3] - pivot[3]];
+            const rv = apply4(rot, shifted);
+            return [rv[0] + pivot[0], rv[1] + pivot[1], rv[2] + pivot[2], rv[3] + pivot[3]];
+        });
+
+        // Render the rotated vertices without mutating the base orientation yet.
+        updateGeometry(animatedVertices);
         if (rotated < angle) {
             requestAnimationFrame(animateRotation);
         } else {
+            // Commit the final orientation and position after finishing the roll.
+            const finalRot = rotation4(axisA, axisB, angle * dir);
+            rotation4d = multiply4(finalRot, rotation4d);
             position3d = next;
             updateGeometry();
             updateInfo();
@@ -260,6 +311,7 @@ function roll(direction) {
 }
 
 function restart() {
+    // Reset 4D orientation and position.
     if (isRotating) return;
     rotation4d = identity4();
     setStartPosition();
@@ -268,12 +320,14 @@ function restart() {
 }
 
 function updateGrid() {
+    // Rebuild the grid helper when size changes.
     scene.remove(grid);
     grid = new THREE.GridHelper(gridSize, gridSize, 0x5b6b7a, 0x2c3440);
     scene.add(grid);
 }
 
 function applyGridSize() {
+    // Apply new grid size from the input and recenter the camera.
     const input = document.getElementById('gridSizeInput');
     const value = parseInt(input.value, 10);
     if (!isNaN(value) && value >= 1 && value <= 15) {
@@ -285,6 +339,7 @@ function applyGridSize() {
 }
 
 // === Animation loop ===
+// Continuous render loop; geometry updates happen during movement.
 function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
@@ -292,6 +347,7 @@ function animate() {
 animate();
 
 // === Resize ===
+// Keep camera and renderer in sync with window size.
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -299,6 +355,7 @@ window.addEventListener('resize', () => {
 });
 
 // === Keyboard controls ===
+// Arrow keys move in X/Z, PageUp/PageDown (or R/F) move in Y.
 window.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowLeft') roll('left');
     if (event.key === 'ArrowRight') roll('right');
