@@ -18,6 +18,7 @@ CubeRoller is a set of single-file Three.js demos: a 3D numbered cube roller and
 - New 4D variant computes per-vertex trajectories around a 4D pivot edge during animation.
 - New 4D variant includes projection tuning: perspective/hybrid/orthographic modes and XW/YW/ZW view-angle controls.
 - In the new 4D variant, projection eye `x/y/z` follows the animated tesseract center during rolls.
+- In the new 4D variant, one cubic cell (`w = -0.5`) is selected and its 6 faces are labeled `1..6` with cube3d numbering.
 
 ## Project Structure
 - `cube3d.html`: Entire app (HTML, CSS, JS). Includes Three.js via CDN.

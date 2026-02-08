@@ -16,4 +16,4 @@ A small collection of browser-only Three.js demos for rolling geometry with orie
 ## Structure
 - `cube3d.html`: HTML, CSS, and JavaScript (Three.js via CDN)
 - `cube4d.html`: 4D tesseract rolling demo (Three.js via CDN)
-- `cube4d-5.3eh.html`: fresh 4D tesseract demo with per-vertex path animation around a 4D pivot edge, switchable projection modes, 4D view-angle controls, and projection-eye tracking to the tesseract center (Three.js via CDN)
+- `cube4d-5.3eh.html`: fresh 4D tesseract demo with per-vertex path animation around a 4D pivot edge, switchable projection modes, 4D view-angle controls, projection-eye tracking to the tesseract center, and one labeled cubic cell (`1..6`) using cube3d face mapping (Three.js via CDN)

@@ -363,6 +363,69 @@ function computeCenter4(vertices4) {
     return [sx / count, sy / count, sz / count, sw / count];
 }
 
+function averageIndexed3(points3, indices) {
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    for (const idx of indices) {
+        sx += points3[idx][0];
+        sy += points3[idx][1];
+        sz += points3[idx][2];
+    }
+    const inv = 1 / indices.length;
+    return [sx * inv, sy * inv, sz * inv];
+}
+
+function sub3(a, b) {
+    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function cross3(a, b) {
+    return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+    ];
+}
+
+function len3(v) {
+    return Math.hypot(v[0], v[1], v[2]);
+}
+
+function normalize3(v) {
+    const l = len3(v);
+    if (l < 1e-6) return [0, 0, 0];
+    return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+function createFaceNumberTexture(number) {
+    const size = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+
+    ctx.clearRect(0, 0, size, size);
+
+    ctx.fillStyle = "rgba(18, 24, 34, 0.88)";
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 10;
+    ctx.strokeRect(10, 10, size - 20, size - 20);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 170px Trebuchet MS";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(number), size / 2, size / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
+}
+
 // === Build tesseract model ===
 // Vertices are all combinations of +/- half-size in 4 dimensions.
 const baseVertices4 = [];
@@ -395,6 +458,72 @@ const lineMat = new THREE.LineBasicMaterial({ color: 0x7ac8ff });
 const tesseractLines = new THREE.LineSegments(geometry, lineMat);
 scene.add(tesseractLines);
 
+// Select one cubic cell of the tesseract: w = -halfSize.
+const selectedCellVertexIndices = [];
+for (let i = 0; i < baseVertices4.length; i++) {
+    if (baseVertices4[i][AXIS.W] === -CONFIG.cubeHalfSize) {
+        selectedCellVertexIndices.push(i);
+    }
+}
+
+const selectedCellEdges = [];
+for (let i = 0; i < selectedCellVertexIndices.length; i++) {
+    for (let j = i + 1; j < selectedCellVertexIndices.length; j++) {
+        const ia = selectedCellVertexIndices[i];
+        const ib = selectedCellVertexIndices[j];
+        let differences = 0;
+        for (const axis of [AXIS.X, AXIS.Y, AXIS.Z]) {
+            if (baseVertices4[ia][axis] !== baseVertices4[ib][axis]) differences++;
+        }
+        if (differences === 1) selectedCellEdges.push([ia, ib]);
+    }
+}
+
+const selectedCellGeometry = new THREE.BufferGeometry();
+const selectedCellPositionBuffer = new Float32Array(selectedCellEdges.length * 2 * 3);
+selectedCellGeometry.setAttribute("position", new THREE.BufferAttribute(selectedCellPositionBuffer, 3));
+const selectedCellLines = new THREE.LineSegments(
+    selectedCellGeometry,
+    new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.95 })
+);
+scene.add(selectedCellLines);
+
+// Face numbering follows cube3d numberMap by axis:
+// +X=3, -X=4, +Y=1, -Y=6, +Z=2, -Z=5
+const selectedCellFaceDefs = [
+    { number: 3, axis: AXIS.X, sign: 1 },
+    { number: 4, axis: AXIS.X, sign: -1 },
+    { number: 1, axis: AXIS.Y, sign: 1 },
+    { number: 6, axis: AXIS.Y, sign: -1 },
+    { number: 2, axis: AXIS.Z, sign: 1 },
+    { number: 5, axis: AXIS.Z, sign: -1 }
+].map((face) => {
+    const indices = selectedCellVertexIndices.filter((idx) => {
+        return Math.sign(baseVertices4[idx][face.axis]) === face.sign;
+    });
+
+    const texture = createFaceNumberTexture(face.number);
+    const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.FrontSide,
+            depthTest: true,
+            depthWrite: false
+        })
+    );
+    mesh.scale.setScalar(0.22);
+    scene.add(mesh);
+
+    return { ...face, indices, mesh };
+});
+
+const faceBasisMatrix = new THREE.Matrix4();
+const faceBasisX = new THREE.Vector3();
+const faceBasisY = new THREE.Vector3();
+const faceBasisZ = new THREE.Vector3();
+
 function gridShift() {
     return (gridSize % 2 === 0) ? 0.5 : 0;
 }
@@ -424,13 +553,13 @@ function updateGeometry(worldVertices) {
     const vertices4 = worldVertices || buildWorldVertices(orientation4, center3);
     const center4 = computeCenter4(vertices4);
     const eyeView4 = apply4(viewRotation4, [center4[0], center4[1], center4[2], 0]);
+    const viewVertices4 = vertices4.map((v) => apply4(viewRotation4, v));
+    const projectedVertices3 = viewVertices4.map((v) => project4to3(v, eyeView4));
 
     let write = 0;
     for (const [ia, ib] of edges) {
-        const aView = apply4(viewRotation4, vertices4[ia]);
-        const bView = apply4(viewRotation4, vertices4[ib]);
-        const a3 = project4to3(aView, eyeView4);
-        const b3 = project4to3(bView, eyeView4);
+        const a3 = projectedVertices3[ia];
+        const b3 = projectedVertices3[ib];
 
         positionBuffer[write++] = a3[0];
         positionBuffer[write++] = a3[1];
@@ -442,6 +571,50 @@ function updateGeometry(worldVertices) {
     }
 
     geometry.attributes.position.needsUpdate = true;
+
+    let selectedWrite = 0;
+    for (const [ia, ib] of selectedCellEdges) {
+        const a3 = projectedVertices3[ia];
+        const b3 = projectedVertices3[ib];
+
+        selectedCellPositionBuffer[selectedWrite++] = a3[0];
+        selectedCellPositionBuffer[selectedWrite++] = a3[1];
+        selectedCellPositionBuffer[selectedWrite++] = a3[2];
+
+        selectedCellPositionBuffer[selectedWrite++] = b3[0];
+        selectedCellPositionBuffer[selectedWrite++] = b3[1];
+        selectedCellPositionBuffer[selectedWrite++] = b3[2];
+    }
+    selectedCellGeometry.attributes.position.needsUpdate = true;
+
+    const selectedCellCenter3 = averageIndexed3(projectedVertices3, selectedCellVertexIndices);
+
+    for (const face of selectedCellFaceDefs) {
+        const faceCenter3 = averageIndexed3(projectedVertices3, face.indices);
+        const normal = normalize3(sub3(faceCenter3, selectedCellCenter3));
+
+        // Use one in-face edge as text horizontal direction, then orthonormalize.
+        let tangent = normalize3(
+            sub3(projectedVertices3[face.indices[1]], projectedVertices3[face.indices[0]])
+        );
+        if (len3(tangent) < 1e-6) tangent = [1, 0, 0];
+
+        let bitangent = normalize3(cross3(normal, tangent));
+        if (len3(bitangent) < 1e-6) bitangent = [0, 1, 0];
+        tangent = normalize3(cross3(bitangent, normal));
+
+        faceBasisX.set(tangent[0], tangent[1], tangent[2]);
+        faceBasisY.set(bitangent[0], bitangent[1], bitangent[2]);
+        faceBasisZ.set(normal[0], normal[1], normal[2]);
+        faceBasisMatrix.makeBasis(faceBasisX, faceBasisY, faceBasisZ);
+        face.mesh.quaternion.setFromRotationMatrix(faceBasisMatrix);
+
+        face.mesh.position.set(
+            faceCenter3[0] + normal[0] * 0.04,
+            faceCenter3[1] + normal[1] * 0.04,
+            faceCenter3[2] + normal[2] * 0.04
+        );
+    }
 }
 
 function inBounds(p) {
@@ -565,6 +738,7 @@ function updateInfo() {
         `Поле: ${gridSize} x ${gridSize} x ${gridSize}`,
         `Проекция: ${projectionMode}, d=${projectionDistance.toFixed(1)}`,
         "Глаз: eye.xyz = центр тессеракта",
+        "Выбранная ячейка: w = -0.5, грани 1..6 как в cube3d",
         `Вид: XW=${xwDeg}°, YW=${ywDeg}°, ZW=${zwDeg}°`,
         "Клавиши: стрелки = x/z, R/F = y+/y-"
     ].join("\n");
