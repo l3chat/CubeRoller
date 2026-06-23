@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>4D кубик как 3D-развёртка — CubeRoller Net</title>
+  <style>
+    :root{--bg0:#0d1117;--bg1:#162033;--panel:rgba(8,12,20,.88);--text:#eaf3ff;--muted:#aac0d8;--accent:#4da6ff;}
+    *{box-sizing:border-box} body{margin:0;overflow:hidden;background:radial-gradient(circle at 20% 15%,#26395f 0%,transparent 42%),radial-gradient(circle at 80% 80%,#1d304d 0%,transparent 45%),linear-gradient(140deg,var(--bg0),var(--bg1));color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    #panel{position:absolute;top:12px;right:12px;width:min(340px,calc(100vw - 24px));padding:12px;border-radius:12px;background:var(--panel);border:1px solid rgba(125,190,255,.24);backdrop-filter:blur(8px);z-index:2;display:grid;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    h1{margin:0;font-size:16px;line-height:1.25}.hint{color:var(--muted);font-size:12px;line-height:1.35}.rows{display:grid;gap:6px}.row{display:flex;gap:6px}
+    button{flex:1;min-height:36px;border:0;border-radius:8px;color:#fff;background:var(--accent);cursor:pointer;font-size:14px;font-weight:650;transition:transform 80ms ease,filter 160ms ease}button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}button.secondary{background:#334155}button.warning{background:#b7791f}
+    label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted)}input[type=number],input[type=range]{width:130px}
+    #info{padding-top:8px;border-top:1px solid rgba(125,190,255,.22);color:#dbeafe;font-size:12px;line-height:1.38;white-space:pre-line}
+    #legend{position:absolute;left:12px;bottom:12px;max-width:min(460px,calc(100vw - 24px));padding:10px 12px;border-radius:10px;background:rgba(8,12,20,.72);border:1px solid rgba(125,190,255,.18);color:#cfe4ff;font-size:12px;line-height:1.35;z-index:2}.kbd{padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    @media(max-width:720px){#panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:54vh;overflow:auto}#legend{left:8px;right:8px;bottom:auto;top:8px}h1{font-size:14px}button{min-height:34px;font-size:13px}}
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h1>4D кубик как трёхмерная развёртка</h1>
+    <div class="hint">Первая рабочая модель: тессеракт показан как развёртка из 8 кубических ячеек. Вся развёртка кантуется как жёсткое тело вокруг ребра центральной ячейки.</div>
+    <div class="rows">
+      <div class="row"><button data-move="left">Влево</button><button data-move="right">Вправо</button></div>
+      <div class="row"><button data-move="forward">Вперёд</button><button data-move="back">Назад</button></div>
+      <div class="row"><button id="yawLeftBtn" class="secondary">⟲ Повернуть</button><button id="yawRightBtn" class="secondary">Повернуть ⟳</button></div>
+      <div class="row"><button id="foldBtn" class="warning">Сложить / разложить</button><button id="restartBtn" class="secondary">Restart</button></div>
+    </div>
+    <label>Размер поля <input type="number" id="gridSizeInput" min="3" max="21" step="2" value="9"></label>
+    <label>Скорость кантования <input type="range" id="speedInput" min="0.015" max="0.12" step="0.005" value="0.055"></label>
+    <label>Прозрачность ячеек <input type="range" id="opacityInput" min="0.08" max="0.65" step="0.01" value="0.26"></label>
+    <div class="row"><button id="applyGridBtn">Применить поле</button></div>
+    <div id="info"></div>
+  </div>
+  <div id="legend">Управление: <span class="kbd">←</span><span class="kbd">→</span><span class="kbd">↑</span><span class="kbd">↓</span> — кантование, <span class="kbd">A</span>/<span class="kbd">D</span> — повернуть развёртку вокруг вертикали, мышь/палец — осмотр сцены.</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script>
+  "use strict";
+  const CONFIG={cubeSize:1,cubeHalf:.5,rollAngle:Math.PI/2,rollStep:.055,gridMin:3,gridMax:21};
+  let gridSize=9,isRolling=false,folded=false,cellOpacity=.26;
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(48,window.innerWidth/window.innerHeight,.1,1000);
+  const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setSize(window.innerWidth,window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2)); renderer.setClearColor(0x111827,1); document.body.appendChild(renderer.domElement);
+  const controls=new THREE.OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.dampingFactor=.08; controls.minDistance=4; controls.maxDistance=35;
+  scene.add(new THREE.AmbientLight(0xffffff,.65)); const dirLight=new THREE.DirectionalLight(0xffffff,.85); dirLight.position.set(6,10,8); scene.add(dirLight); const fillLight=new THREE.DirectionalLight(0x88bfff,.35); fillLight.position.set(-8,5,-6); scene.add(fillLight);
+  let gridHelper=null,borderLines=null,netGroup=null; const root=new THREE.Group(); scene.add(root); const moving=new THREE.Group(); root.add(moving); let activePosition=new THREE.Vector3(0,CONFIG.cubeHalf,0); const cellMaterials=[];
+  const unfoldedCells=[{id:1,name:"центр",pos:[0,0,0],color:0xffd166},{id:2,name:"+X",pos:[1,0,0],color:0x4da6ff},{id:3,name:"-X",pos:[-1,0,0],color:0x7dd3fc},{id:4,name:"+Y",pos:[0,1,0],color:0xa7f3d0},{id:5,name:"-Y",pos:[0,-1,0],color:0xfca5a5},{id:6,name:"+Z",pos:[0,0,1],color:0xc4b5fd},{id:7,name:"-Z",pos:[0,0,-1],color:0x93c5fd},{id:8,name:"внешн.",pos:[2,0,0],color:0xf9a8d4}];
+  const foldedCells=[{id:1,name:"центр",pos:[0,0,0],color:0xffd166},{id:2,name:"+X",pos:[.72,.24,0],color:0x4da6ff},{id:3,name:"-X",pos:[-.72,.24,0],color:0x7dd3fc},{id:4,name:"+Y",pos:[0,.95,0],color:0xa7f3d0},{id:5,name:"-Y",pos:[0,-.72,0],color:0xfca5a5},{id:6,name:"+Z",pos:[0,.24,.72],color:0xc4b5fd},{id:7,name:"-Z",pos:[0,.24,-.72],color:0x93c5fd},{id:8,name:"внешн.",pos:[1.28,.58,0],color:0xf9a8d4}];
+  function createTextTexture(lines,opt={}){const size=opt.size||256,canvas=document.createElement("canvas");canvas.width=size;canvas.height=size;const ctx=canvas.getContext("2d");ctx.clearRect(0,0,size,size);ctx.fillStyle=opt.color||"#fff";ctx.textAlign="center";ctx.textBaseline="middle";const arr=Array.isArray(lines)?lines:[String(lines)],main=opt.mainSize||96,sub=opt.subSize||30;if(arr.length===1){ctx.font=`800 ${main}px system-ui,sans-serif`;ctx.fillText(arr[0],size/2,size/2)}else{ctx.font=`800 ${main}px system-ui,sans-serif`;ctx.fillText(arr[0],size/2,size*.43);ctx.font=`600 ${sub}px system-ui,sans-serif`;ctx.fillText(arr[1],size/2,size*.67)}const tex=new THREE.CanvasTexture(canvas);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;return tex}
+  function createCell(cell){const group=new THREE.Group();const mat=new THREE.MeshPhongMaterial({color:cell.color,transparent:true,opacity:cell.id===1?Math.min(.48,cellOpacity+.16):cellOpacity,shininess:40,side:THREE.DoubleSide});cellMaterials.push(mat);const cube=new THREE.Mesh(new THREE.BoxGeometry(CONFIG.cubeSize,CONFIG.cubeSize,CONFIG.cubeSize),mat);group.add(cube);const edges=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(CONFIG.cubeSize,CONFIG.cubeSize,CONFIG.cubeSize)),new THREE.LineBasicMaterial({color:cell.id===1?0xffffff:cell.color,transparent:true,opacity:cell.id===1?.95:.72}));group.add(edges);const labelTexture=createTextTexture([String(cell.id),cell.name],{mainSize:104,subSize:28,color:"#fff"});const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture,transparent:true,depthTest:false}));sprite.scale.set(.54,.54,.54);group.add(sprite);return group}
+  function buildNet(){if(netGroup){moving.remove(netGroup);disposeObject(netGroup)}cellMaterials.length=0;netGroup=new THREE.Group();const cells=folded?foldedCells:unfoldedCells;for(const cell of cells){const g=createCell(cell);g.position.set(cell.pos[0],cell.pos[1],cell.pos[2]);netGroup.add(g)}moving.add(netGroup);setOpacity(cellOpacity)}
+  function disposeObject(obj){obj.traverse(child=>{if(child.geometry)child.geometry.dispose();if(child.material){const arr=Array.isArray(child.material)?child.material:[child.material];arr.forEach(m=>{if(m.map)m.map.dispose();m.dispose()})}})}
+  function rebuildField(){if(gridHelper)scene.remove(gridHelper);if(borderLines)scene.remove(borderLines);gridHelper=new THREE.GridHelper(gridSize,gridSize,0x6ea8d9,0x35516a);scene.add(gridHelper);const box=new THREE.BoxGeometry(gridSize,.02,gridSize),edges=new THREE.EdgesGeometry(box);borderLines=new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x7ac8ff,transparent:true,opacity:.55}));borderLines.position.y=.012;scene.add(borderLines)}
+  function centerCamera(){const dist=Math.max(8,gridSize*1.45);camera.position.set(-dist*.75,dist*.65,dist);camera.lookAt(0,.8,0);controls.target.set(0,.8,0);controls.update()}
+  function gridShift(){return gridSize%2===0?.5:0}
+  function resetState(){const s=gridShift();activePosition.set(s,CONFIG.cubeHalf,s);moving.position.copy(activePosition);moving.rotation.set(0,0,0);moving.quaternion.set(0,0,0,1);updateInfo()}
+  function inBounds(next){const limit=(gridSize-1)/2;return Math.abs(next.x)<=limit&&Math.abs(next.z)<=limit}
+  const moves={left:{dx:-1,dz:0,axis:new THREE.Vector3(0,0,1),pivotOffset:new THREE.Vector3(-.5,-.5,0)},right:{dx:1,dz:0,axis:new THREE.Vector3(0,0,-1),pivotOffset:new THREE.Vector3(.5,-.5,0)},forward:{dx:0,dz:-1,axis:new THREE.Vector3(-1,0,0),pivotOffset:new THREE.Vector3(0,-.5,-.5)},back:{dx:0,dz:1,axis:new THREE.Vector3(1,0,0),pivotOffset:new THREE.Vector3(0,-.5,.5)}};
+  function roll(moveName){if(isRolling)return;const move=moves[moveName];if(!move)return;const next={x:activePosition.x+move.dx,z:activePosition.z+move.dz};if(!inBounds(next))return;const pivotWorld=activePosition.clone().add(move.pivotOffset),pivot=new THREE.Object3D();pivot.position.copy(pivotWorld);scene.add(pivot);scene.remove(moving);pivot.add(moving);moving.position.sub(pivotWorld);isRolling=true;let accumulated=0;function animateRoll(){const step=Math.min(CONFIG.rollStep,CONFIG.rollAngle-accumulated);pivot.rotateOnAxis(move.axis,step);accumulated+=step;if(accumulated<CONFIG.rollAngle){requestAnimationFrame(animateRoll);return}moving.updateMatrixWorld(true);const worldPosition=new THREE.Vector3(),worldQuaternion=new THREE.Quaternion();moving.getWorldPosition(worldPosition);moving.getWorldQuaternion(worldQuaternion);pivot.remove(moving);scene.remove(pivot);scene.add(moving);activePosition.set(next.x,CONFIG.cubeHalf,next.z);moving.position.copy(activePosition);moving.quaternion.copy(worldQuaternion);isRolling=false;updateInfo()}animateRoll()}
+  function yaw(sign){if(isRolling)return;const q=new THREE.Quaternion();q.setFromAxisAngle(new THREE.Vector3(0,1,0),sign*Math.PI/2);moving.quaternion.premultiply(q);updateInfo()}
+  function applyGridSize(){const input=document.getElementById("gridSizeInput");let value=parseInt(input.value,10);if(Number.isNaN(value))return;value=Math.max(CONFIG.gridMin,Math.min(CONFIG.gridMax,value));if(value%2===0)value+=1;if(value>CONFIG.gridMax)value=CONFIG.gridMax;gridSize=value;input.value=String(gridSize);rebuildField();centerCamera();resetState()}
+  function setOpacity(value){cellOpacity=value;for(const mat of cellMaterials)mat.opacity=Math.min(.65,value);if(cellMaterials[0])cellMaterials[0].opacity=Math.min(.72,value+.16)}
+  function updateInfo(){const euler=new THREE.Euler().setFromQuaternion(moving.quaternion,"XYZ"),deg=v=>Math.round(v*180/Math.PI),el=document.getElementById("info");el.textContent=[`Позиция активной ячейки: x=${activePosition.x.toFixed(1)}, z=${activePosition.z.toFixed(1)}`,`Поле: ${gridSize} × ${gridSize}`,`Состояние развёртки: ${folded?"условно сложенная":"разложенная"}`,`Ориентация: X=${deg(euler.x)}°, Y=${deg(euler.y)}°, Z=${deg(euler.z)}°`,`Ячейки: 1 — центральная, 2..7 — соседние, 8 — дополнительная внешняя ячейка`,`Модель: интуитивная 3D-развёртка, не строгая 4D-проекция`].join("\n")}
+  function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}
+  document.querySelectorAll("button[data-move]").forEach(button=>button.addEventListener("click",()=>roll(button.dataset.move)));document.getElementById("restartBtn").addEventListener("click",resetState);document.getElementById("applyGridBtn").addEventListener("click",applyGridSize);document.getElementById("yawLeftBtn").addEventListener("click",()=>yaw(1));document.getElementById("yawRightBtn").addEventListener("click",()=>yaw(-1));document.getElementById("foldBtn").addEventListener("click",()=>{if(isRolling)return;folded=!folded;buildNet();updateInfo()});document.getElementById("speedInput").addEventListener("input",event=>{CONFIG.rollStep=parseFloat(event.target.value)});document.getElementById("opacityInput").addEventListener("input",event=>{setOpacity(parseFloat(event.target.value))});
+  window.addEventListener("keydown",event=>{if(event.repeat)return;if(event.key==="ArrowLeft")roll("left");if(event.key==="ArrowRight")roll("right");if(event.key==="ArrowUp")roll("forward");if(event.key==="ArrowDown")roll("back");if(event.key==="a"||event.key==="A")yaw(1);if(event.key==="d"||event.key==="D")yaw(-1);if(event.key==="r"||event.key==="R")resetState()});
+  window.addEventListener("resize",()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight)});
+  buildNet();rebuildField();centerCamera();resetState();setOpacity(cellOpacity);animate();
+  </script>
+</body>
+</html>
