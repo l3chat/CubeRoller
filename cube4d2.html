@@ -1,264 +1,73 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>4D cube net roller v3</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>4D кубик как 3D-развёртка — CubeRoller Net</title>
   <style>
-    :root{--bg0:#0b1020;--bg1:#17223a;--panel:rgba(8,12,22,.9);--text:#eaf3ff;--muted:#adc3dd;--accent:#4da6ff;--gold:#ffd166;}
-    *{box-sizing:border-box} body{margin:0;overflow:hidden;color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(circle at 20% 18%,#243a63 0,transparent 42%),radial-gradient(circle at 82% 80%,#1d3152 0,transparent 45%),linear-gradient(140deg,var(--bg0),var(--bg1));}
-    #panel{position:absolute;right:12px;top:12px;z-index:5;width:min(410px,calc(100vw - 24px));padding:12px;border-radius:12px;background:var(--panel);border:1px solid rgba(125,190,255,.24);box-shadow:0 12px 32px rgba(0,0,0,.35);backdrop-filter:blur(8px);display:grid;gap:10px}
-    h1{font-size:16px;margin:0;line-height:1.25}.hint{font-size:12px;line-height:1.35;color:var(--muted)}.rows{display:grid;gap:6px}.row{display:flex;gap:6px}
-    button{flex:1;min-height:36px;border:0;border-radius:8px;background:var(--accent);color:white;font-size:14px;font-weight:700;cursor:pointer}button.secondary{background:#334155}button.gold{background:#a86d17}button:hover{filter:brightness(1.08)}
-    label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:13px}input[type=number],input[type=range]{width:145px}
-    #info{border-top:1px solid rgba(125,190,255,.22);padding-top:8px;font-size:12px;line-height:1.38;white-space:pre-line;color:#dbeafe}.small{font-size:11px;color:#9eb6d2}
-    #legend{position:absolute;left:12px;bottom:12px;z-index:4;max-width:min(650px,calc(100vw - 24px));padding:10px 12px;border-radius:10px;background:rgba(8,12,20,.72);border:1px solid rgba(125,190,255,.18);font-size:12px;color:#cfe4ff;line-height:1.35}
-    .kbd{display:inline-block;min-width:20px;text-align:center;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);font-family:ui-monospace,Menlo,Consolas,monospace}
-    @media(max-width:780px){#panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:60vh;overflow:auto}#legend{left:8px;right:8px;top:8px;bottom:auto}h1{font-size:14px}button{font-size:13px;min-height:34px}}
+    :root{--bg0:#0d1117;--bg1:#162033;--panel:rgba(8,12,20,.88);--text:#eaf3ff;--muted:#aac0d8;--accent:#4da6ff;}
+    *{box-sizing:border-box} body{margin:0;overflow:hidden;background:radial-gradient(circle at 20% 15%,#26395f 0%,transparent 42%),radial-gradient(circle at 80% 80%,#1d304d 0%,transparent 45%),linear-gradient(140deg,var(--bg0),var(--bg1));color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    #panel{position:absolute;top:12px;right:12px;width:min(340px,calc(100vw - 24px));padding:12px;border-radius:12px;background:var(--panel);border:1px solid rgba(125,190,255,.24);backdrop-filter:blur(8px);z-index:2;display:grid;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    h1{margin:0;font-size:16px;line-height:1.25}.hint{color:var(--muted);font-size:12px;line-height:1.35}.rows{display:grid;gap:6px}.row{display:flex;gap:6px}
+    button{flex:1;min-height:36px;border:0;border-radius:8px;color:#fff;background:var(--accent);cursor:pointer;font-size:14px;font-weight:650;transition:transform 80ms ease,filter 160ms ease}button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}button.secondary{background:#334155}button.warning{background:#b7791f}
+    label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted)}input[type=number],input[type=range]{width:130px}
+    #info{padding-top:8px;border-top:1px solid rgba(125,190,255,.22);color:#dbeafe;font-size:12px;line-height:1.38;white-space:pre-line}
+    #legend{position:absolute;left:12px;bottom:12px;max-width:min(460px,calc(100vw - 24px));padding:10px 12px;border-radius:10px;background:rgba(8,12,20,.72);border:1px solid rgba(125,190,255,.18);color:#cfe4ff;font-size:12px;line-height:1.35;z-index:2}.kbd{padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    @media(max-width:720px){#panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:54vh;overflow:auto}#legend{left:8px;right:8px;bottom:auto;top:8px}h1{font-size:14px}button{min-height:34px;font-size:13px}}
   </style>
 </head>
 <body>
   <div id="panel">
-    <h1>4D кубик как 3D-развёртка · v3</h1>
-    <div class="hint">Исправленная модель: поле движения — объёмная 3D-решётка. При переходе не вращается вся развёртка; анимируется только локальная полоса: центральная ячейка, целевая ячейка и соседние кубики в плоскости, параллельной грани перехода. Остальные ячейки остаются неподвижными и затем перестраиваются вокруг новой центральной.</div>
+    <h1>4D кубик как трёхмерная развёртка</h1>
+    <div class="hint">Первая рабочая модель: тессеракт показан как развёртка из 8 кубических ячеек. Вся развёртка кантуется как жёсткое тело вокруг ребра центральной ячейки.</div>
     <div class="rows">
-      <div class="row"><button data-move="x-">−X / ←</button><button data-move="x+">+X / →</button></div>
-      <div class="row"><button data-move="y+">+Y / R</button><button data-move="y-">−Y / F</button></div>
-      <div class="row"><button data-move="z-">−Z / ↑</button><button data-move="z+">+Z / ↓</button></div>
-      <div class="row"><button id="undoBtn" class="secondary">Назад</button><button id="resetBtn" class="secondary">Сброс</button></div>
-      <div class="row"><button id="spinLeftBtn" class="secondary">⟲ Вид</button><button id="spinRightBtn" class="secondary">Вид ⟳</button></div>
+      <div class="row"><button data-move="left">Влево</button><button data-move="right">Вправо</button></div>
+      <div class="row"><button data-move="forward">Вперёд</button><button data-move="back">Назад</button></div>
+      <div class="row"><button id="yawLeftBtn" class="secondary">⟲ Повернуть</button><button id="yawRightBtn" class="secondary">Повернуть ⟳</button></div>
+      <div class="row"><button id="foldBtn" class="warning">Сложить / разложить</button><button id="restartBtn" class="secondary">Restart</button></div>
     </div>
-    <label>Размер 3D-поля <input id="gridInput" type="number" min="3" max="13" step="2" value="7"></label>
-    <label>Скорость <input id="speedInput" type="range" min="0.015" max="0.12" step="0.005" value="0.055"></label>
-    <label>Прозрачность <input id="opacityInput" type="range" min="0.08" max="0.7" step="0.01" value="0.28"></label>
-    <label><span>Показывать 3D-поле</span><input id="fieldToggle" type="checkbox" checked></label>
-    <div class="row"><button id="applyGridBtn" class="gold">Применить поле</button></div>
+    <label>Размер поля <input type="number" id="gridSizeInput" min="3" max="21" step="2" value="9"></label>
+    <label>Скорость кантования <input type="range" id="speedInput" min="0.015" max="0.12" step="0.005" value="0.055"></label>
+    <label>Прозрачность ячеек <input type="range" id="opacityInput" min="0.08" max="0.65" step="0.01" value="0.26"></label>
+    <div class="row"><button id="applyGridBtn">Применить поле</button></div>
     <div id="info"></div>
-    <div class="small">v3 — геометрически-образная модель. Следующий шаг: уточнить правило перестройки развёртки после перехода, чтобы оно полностью соответствовало выбранной топологии 4D-куба.</div>
   </div>
-
-  <div id="legend">Клавиши: <span class="kbd">←</span><span class="kbd">→</span><span class="kbd">↑</span><span class="kbd">↓</span> — X/Z, <span class="kbd">R</span>/<span class="kbd">F</span> — Y+/Y−, <span class="kbd">A</span>/<span class="kbd">D</span> — повернуть вид, мышь/палец — осмотр.</div>
+  <div id="legend">Управление: <span class="kbd">←</span><span class="kbd">→</span><span class="kbd">↑</span><span class="kbd">↓</span> — кантование, <span class="kbd">A</span>/<span class="kbd">D</span> — повернуть развёртку вокруг вертикали, мышь/палец — осмотр сцены.</div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script>
   "use strict";
-
-  const AXIS_NAMES = ["X","Y","Z","W"];
-  const AXIS_COLOR = { X:0x4da6ff, Y:0xa7f3d0, Z:0xc4b5fd, W:0xffd166 };
-  const CONFIG = { half:.5, size:1, rollAngle:Math.PI/2, rollStep:.055 };
-  let gridSize = 7, opacity = .28, activeId = 1, path = [1], isMoving = false;
-  let fieldVisible = true;
-
-  // 8 cells of a tesseract: each cubic cell is one fixed 4D coordinate.
-  const CELLS = [
-    { id:1, axis:"W", sign:+1, label:"W+" }, { id:8, axis:"W", sign:-1, label:"W−" },
-    { id:2, axis:"X", sign:+1, label:"X+" }, { id:3, axis:"X", sign:-1, label:"X−" },
-    { id:4, axis:"Y", sign:+1, label:"Y+" }, { id:5, axis:"Y", sign:-1, label:"Y−" },
-    { id:6, axis:"Z", sign:+1, label:"Z+" }, { id:7, axis:"Z", sign:-1, label:"Z−" }
-  ];
-  const byId = new Map(CELLS.map(c=>[c.id,c]));
-  const byAxisSign = new Map(CELLS.map(c=>[c.axis + c.sign, c]));
-
-  function localAxes(cell){ return AXIS_NAMES.filter(a=>a!==cell.axis); }
-  function cellName(c){ return `${c.id}·${c.label}`; }
-  function colorFor(c){ return AXIS_COLOR[c.axis]; }
-  function neighbor(active, localIndex, sign){ const a=localAxes(active)[localIndex]; return byAxisSign.get(a+sign); }
-  function oppositeCell(active){ return byAxisSign.get(active.axis + (-active.sign)); }
-
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, .1, 1000);
-  const renderer = new THREE.WebGLRenderer({antialias:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2)); renderer.setSize(innerWidth,innerHeight); renderer.setClearColor(0x111827,1); document.body.appendChild(renderer.domElement);
-  const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping=true; controls.dampingFactor=.08; controls.minDistance=4; controls.maxDistance=40;
-  scene.add(new THREE.AmbientLight(0xffffff,.68));
-  const light = new THREE.DirectionalLight(0xffffff,.88); light.position.set(7,10,8); scene.add(light);
-  const light2 = new THREE.DirectionalLight(0x9cc8ff,.32); light2.position.set(-8,5,-7); scene.add(light2);
-
-  const world = new THREE.Group(); scene.add(world);       // rotates only the user's view of the model
-  const netRoot = new THREE.Group(); world.add(netRoot);   // net is rebuilt in local center but translated in 3D field
-  let fieldGroup = null, netGroup = null;
-  let activePos = new THREE.Vector3(0,0,0);
-  const cellObjects = new Map();
-  const materialRefs = [];
-
-  function texture(lines, opt={}){
-    const s=256, c=document.createElement('canvas'); c.width=c.height=s; const ctx=c.getContext('2d'); ctx.clearRect(0,0,s,s);
-    if(opt.bg){ ctx.fillStyle=opt.bg; ctx.fillRect(0,0,s,s); }
-    if(opt.border){ ctx.strokeStyle=opt.border; ctx.lineWidth=opt.bw||8; ctx.strokeRect(8,8,s-16,s-16); }
-    const arr=Array.isArray(lines)?lines:[String(lines)]; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle=opt.color||'#fff';
-    if(arr.length===1){ ctx.font=`800 ${opt.main||120}px system-ui`; ctx.fillText(arr[0],s/2,s/2); }
-    else { ctx.font=`800 ${opt.main||96}px system-ui`; ctx.fillText(arr[0],s/2,s*.40); ctx.font=`650 ${opt.sub||30}px system-ui`; ctx.fillText(arr[1],s/2,s*.68); }
-    const t=new THREE.CanvasTexture(c); t.minFilter=THREE.LinearFilter; t.magFilter=THREE.LinearFilter; return t;
-  }
-
-  function makeCell(cell, role){
-    const g = new THREE.Group();
-    const mat = new THREE.MeshPhongMaterial({ color:colorFor(cell), transparent:true, opacity: role==='active'?Math.min(.78,opacity+.22):(role==='opposite'?.10:opacity), shininess:45, side:THREE.DoubleSide, depthWrite:false });
-    materialRefs.push({mat,role});
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mat); g.add(cube);
-    const ec = role==='active'?0xffffff:(role==='opposite'?0x718096:colorFor(cell));
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)), new THREE.LineBasicMaterial({color:ec, transparent:true, opacity:role==='active'?.95:(role==='opposite'?.25:.7)})); g.add(edges);
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({map:texture(role==='opposite'?[String(cell.id),'не сосед']:[String(cell.id),cell.label],{main:role==='active'?112:96,sub:28}), transparent:true, depthTest:false}));
-    spr.scale.set(role==='active'?.58:.52, role==='active'?.58:.52, .58); g.add(spr);
-    g.userData = {cellId:cell.id, role};
-    return g;
-  }
-
-  function addFaceLabel(parent, localIndex, sign, target){
-    const faceName = ['X','Y','Z'][localIndex], sgn = sign>0?'+':'−';
-    const mat = new THREE.MeshBasicMaterial({ map:texture([String(target.id),`${sgn}${faceName} → ${target.label}`],{main:82,sub:24,bg:'rgba(4,12,22,.62)',border:'#fff',bw:6}), transparent:true, side:THREE.DoubleSide, depthWrite:false });
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(.72,.72), mat); const d=.512;
-    if(localIndex===0){ p.position.set(sign*d,0,0); p.rotation.y=sign>0?Math.PI/2:-Math.PI/2; }
-    if(localIndex===1){ p.position.set(0,sign*d,0); p.rotation.x=sign>0?-Math.PI/2:Math.PI/2; }
-    if(localIndex===2){ p.position.set(0,0,sign*d); p.rotation.y=sign>0?0:Math.PI; }
-    parent.add(p);
-  }
-
-  function addLine(parent, a, b, color, op){
-    const geom=new THREE.BufferGeometry(); geom.setAttribute('position', new THREE.Float32BufferAttribute([a.x,a.y,a.z,b.x,b.y,b.z],3));
-    parent.add(new THREE.Line(geom, new THREE.LineBasicMaterial({color,transparent:true,opacity:op})));
-  }
-
-  function dispose(o){ o.traverse(ch=>{ if(ch.geometry)ch.geometry.dispose(); if(ch.material){ const ms=Array.isArray(ch.material)?ch.material:[ch.material]; ms.forEach(m=>{ if(m.map)m.map.dispose(); m.dispose(); }); } }); }
-
-  function rebuildNet(){
-    if(netGroup){ netRoot.remove(netGroup); dispose(netGroup); }
-    cellObjects.clear(); materialRefs.length=0;
-    netGroup = new THREE.Group();
-    const act = byId.get(activeId), axes = localAxes(act);
-    const activeObj = makeCell(act,'active'); activeObj.position.set(0,0,0); netGroup.add(activeObj); cellObjects.set(act.id, activeObj);
-
-    for(let i=0;i<3;i++) for(const sign of [-1,+1]){
-      const n = byAxisSign.get(axes[i]+sign); const pos = new THREE.Vector3();
-      if(i===0)pos.set(sign*1.18,0,0); if(i===1)pos.set(0,sign*1.18,0); if(i===2)pos.set(0,0,sign*1.18);
-      const obj = makeCell(n,'neighbor'); obj.position.copy(pos); netGroup.add(obj); cellObjects.set(n.id,obj);
-      addFaceLabel(activeObj,i,sign,n); addLine(netGroup,new THREE.Vector3(0,0,0),pos,colorFor(n),.30);
-    }
-    const opp=oppositeCell(act), oppObj=makeCell(opp,'opposite'); oppObj.position.set(2.55,1.45,0); netGroup.add(oppObj); cellObjects.set(opp.id,oppObj);
-    addLine(netGroup,new THREE.Vector3(1.18,0,0),oppObj.position,0x8a99aa,.18);
-    addLocalAxisRods(netGroup);
-    netRoot.add(netGroup); netRoot.position.copy(activePos); updateOpacity(); updateInfo();
-  }
-
-  function addLocalAxisRods(parent){
-    const rods=[{a:[-.82,0,0],b:[.82,0,0],c:0x4da6ff},{a:[0,-.82,0],b:[0,.82,0],c:0xa7f3d0},{a:[0,0,-.82],b:[0,0,.82],c:0xc4b5fd}];
-    for(const r of rods){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute([...r.a,...r.b],3)); parent.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:r.c,transparent:true,opacity:.45}))); }
-  }
-
-  function updateOpacity(){ for(const x of materialRefs){ x.mat.opacity = x.role==='active'?Math.min(.78,opacity+.22):(x.role==='opposite'?Math.max(.05,opacity*.34):opacity); } }
-
-  function rebuild3DField(){
-    if(fieldGroup){ scene.remove(fieldGroup); dispose(fieldGroup); }
-    fieldGroup = new THREE.Group(); fieldGroup.visible = fieldVisible;
-    const half=(gridSize-1)/2;
-    const matLine = new THREE.LineBasicMaterial({color:0x395b78,transparent:true,opacity:.38});
-    const bright = new THREE.LineBasicMaterial({color:0x7ac8ff,transparent:true,opacity:.55});
-    // cubic boundary
-    const box = new THREE.BoxGeometry(gridSize, gridSize, gridSize); const edges = new THREE.EdgesGeometry(box); const bounds=new THREE.LineSegments(edges, bright); fieldGroup.add(bounds);
-    // sparse 3D lattice lines
-    for(let x=-half;x<=half;x++) for(let y=-half;y<=half;y++){
-      const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute([x,y,-half,x,y,half],3)); fieldGroup.add(new THREE.Line(g,matLine));
-    }
-    for(let x=-half;x<=half;x++) for(let z=-half;z<=half;z++){
-      const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute([x,-half,z,x,half,z],3)); fieldGroup.add(new THREE.Line(g,matLine));
-    }
-    for(let y=-half;y<=half;y++) for(let z=-half;z<=half;z++){
-      const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute([-half,y,z,half,y,z],3)); fieldGroup.add(new THREE.Line(g,matLine));
-    }
-    scene.add(fieldGroup);
-  }
-
-  function centerCamera(){ const d=Math.max(8,gridSize*1.65); camera.position.set(-d*.85,d*.72,d); controls.target.set(0,0,0); camera.lookAt(0,0,0); controls.update(); }
-  function within(p){ const h=(gridSize-1)/2; return Math.abs(p.x)<=h && Math.abs(p.y)<=h && Math.abs(p.z)<=h; }
-
-  const moveDefs = {
-    'x-':{local:0,sign:-1,delta:new THREE.Vector3(-1,0,0),axis:new THREE.Vector3(0,0,1),plane:'YZ'},
-    'x+':{local:0,sign:+1,delta:new THREE.Vector3( 1,0,0),axis:new THREE.Vector3(0,0,-1),plane:'YZ'},
-    'y+':{local:1,sign:+1,delta:new THREE.Vector3(0, 1,0),axis:new THREE.Vector3(1,0,0),plane:'XZ'},
-    'y-':{local:1,sign:-1,delta:new THREE.Vector3(0,-1,0),axis:new THREE.Vector3(-1,0,0),plane:'XZ'},
-    'z-':{local:2,sign:-1,delta:new THREE.Vector3(0,0,-1),axis:new THREE.Vector3(-1,0,0),plane:'XY'},
-    'z+':{local:2,sign:+1,delta:new THREE.Vector3(0,0, 1),axis:new THREE.Vector3(1,0,0),plane:'XY'}
-  };
-
-  function affectedCellsForMove(move){
-    const act=byId.get(activeId), axes=localAxes(act), target=neighbor(act,move.local,move.sign);
-    const ids = new Set([activeId, target.id]);
-    // Cubes adjacent to the central one and lying in the plane parallel to the face of transition:
-    // if transition is along local X, then the parallel plane is local YZ, so include ±Y and ±Z neighbors.
-    for(let i=0;i<3;i++) if(i!==move.local){ ids.add(byAxisSign.get(axes[i]+1).id); ids.add(byAxisSign.get(axes[i]+-1).id); }
-    return ids;
-  }
-
-  function transition(key){
-    if(isMoving) return; const mv=moveDefs[key]; if(!mv) return;
-    const nextPos=activePos.clone().add(mv.delta); if(!within(nextPos)) return;
-    const act=byId.get(activeId), target=neighbor(act,mv.local,mv.sign); if(!target) return;
-    const affected = affectedCellsForMove(mv);
-    animateLocalSlice(mv, affected, nextPos, () => { activeId=target.id; activePos.copy(nextPos); path.push(target.id); rebuildNet(); });
-  }
-
-  function animateLocalSlice(mv, affectedIds, nextPos, done){
-    isMoving = true;
-    // Split current net: affected cells go into rotating group, others remain in place.
-    const rot = new THREE.Group(); netGroup.add(rot);
-    const moved = [];
-    for(const id of affectedIds){ const obj=cellObjects.get(id); if(!obj)continue; const wp=new THREE.Vector3(); obj.getWorldPosition(wp); const local=netGroup.worldToLocal(wp.clone()); obj.position.copy(local); netGroup.remove(obj); rot.add(obj); moved.push(obj); }
-
-    // A visual pivot near the transition face of the active cell.
-    const pivot = new THREE.Object3D(); netGroup.add(pivot);
-    const pivotPos = new THREE.Vector3();
-    if(mv.local===0) pivotPos.set(mv.sign*.5, -.5, 0);
-    if(mv.local===1) pivotPos.set(0, mv.sign*.5, -.5);
-    if(mv.local===2) pivotPos.set(0, -.5, mv.sign*.5);
-    pivot.position.copy(pivotPos);
-    netGroup.remove(rot); pivot.add(rot); rot.position.sub(pivotPos);
-
-    let acc=0;
-    function frame(){
-      const step=Math.min(CONFIG.rollStep, CONFIG.rollAngle-acc); acc+=step; pivot.rotateOnAxis(mv.axis, step);
-      // Move the net root through the actual 3D field while local slice folds.
-      const t=acc/CONFIG.rollAngle; netRoot.position.lerpVectors(activePos,nextPos,t);
-      if(acc<CONFIG.rollAngle){ requestAnimationFrame(frame); return; }
-      pivot.remove(rot); netGroup.remove(pivot); netGroup.add(rot); rot.position.set(0,0,0); rot.rotation.set(0,0,0);
-      // Return affected objects to netGroup; the final canonical layout is rebuilt anyway.
-      for(const obj of moved){ const wp=new THREE.Vector3(); obj.getWorldPosition(wp); const lp=netGroup.worldToLocal(wp.clone()); obj.position.copy(lp); rot.remove(obj); netGroup.add(obj); }
-      netGroup.remove(rot); isMoving=false; done();
-    }
-    frame();
-  }
-
-  function undo(){ if(isMoving||path.length<=1)return; path.pop(); activeId=path[path.length-1]; // approximate inverse movement not tracked; keep field position as is intentionally.
-    rebuildNet(); }
-  function resetAll(){ if(isMoving)return; activeId=1; path=[1]; activePos.set(0,0,0); netRoot.position.copy(activePos); world.rotation.set(0,0,0); world.quaternion.set(0,0,0,1); rebuildNet(); }
-  function spin(sign){ if(isMoving)return; world.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),sign*Math.PI/2)); }
-  function applyGrid(){ let v=parseInt(document.getElementById('gridInput').value,10); if(Number.isNaN(v))return; v=Math.max(3,Math.min(13,v)); if(v%2===0)v+=1; if(v>13)v=13; gridSize=v; document.getElementById('gridInput').value=String(v); rebuild3DField(); centerCamera(); resetAll(); }
-
-  function updateInfo(){
-    const act=byId.get(activeId), axes=localAxes(act);
-    const lines = [
-      `Активная 4D-ячейка: ${cellName(act)}`,
-      `Позиция в 3D-поле: x=${activePos.x.toFixed(0)}, y=${activePos.y.toFixed(0)}, z=${activePos.z.toFixed(0)}`,
-      `Локальные оси активной ячейки: X=${axes[0]}, Y=${axes[1]}, Z=${axes[2]}`,
-      `Прямо не соседствует: ${cellName(oppositeCell(act))}`,
-      `Параллельные плоскости переходов: X→YZ, Y→XZ, Z→XY`,
-      `Путь: ${path.map(id=>byId.get(id).label).join(' → ')}`
-    ];
-    document.getElementById('info').textContent = lines.join('\n');
-  }
-
-  document.querySelectorAll('button[data-move]').forEach(b=>b.addEventListener('click',()=>transition(b.dataset.move)));
-  document.getElementById('undoBtn').addEventListener('click',undo); document.getElementById('resetBtn').addEventListener('click',resetAll);
-  document.getElementById('spinLeftBtn').addEventListener('click',()=>spin(1)); document.getElementById('spinRightBtn').addEventListener('click',()=>spin(-1));
-  document.getElementById('applyGridBtn').addEventListener('click',applyGrid);
-  document.getElementById('speedInput').addEventListener('input',e=>CONFIG.rollStep=parseFloat(e.target.value));
-  document.getElementById('opacityInput').addEventListener('input',e=>{opacity=parseFloat(e.target.value); updateOpacity();});
-  document.getElementById('fieldToggle').addEventListener('change',e=>{fieldVisible=e.target.checked; if(fieldGroup)fieldGroup.visible=fieldVisible;});
-  addEventListener('keydown',e=>{ if(e.repeat)return; if(e.key==='ArrowLeft')transition('x-'); if(e.key==='ArrowRight')transition('x+'); if(e.key==='ArrowUp')transition('z-'); if(e.key==='ArrowDown')transition('z+'); if(e.key==='r'||e.key==='R')transition('y+'); if(e.key==='f'||e.key==='F')transition('y-'); if(e.key==='a'||e.key==='A')spin(1); if(e.key==='d'||e.key==='D')spin(-1); if(e.key==='Backspace')undo(); });
-  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight);});
-  function render(){ requestAnimationFrame(render); controls.update(); renderer.render(scene,camera); }
-
-  rebuild3DField(); rebuildNet(); centerCamera(); render();
+  const CONFIG={cubeSize:1,cubeHalf:.5,rollAngle:Math.PI/2,rollStep:.055,gridMin:3,gridMax:21};
+  let gridSize=9,isRolling=false,folded=false,cellOpacity=.26;
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(48,window.innerWidth/window.innerHeight,.1,1000);
+  const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setSize(window.innerWidth,window.innerHeight); renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2)); renderer.setClearColor(0x111827,1); document.body.appendChild(renderer.domElement);
+  const controls=new THREE.OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.dampingFactor=.08; controls.minDistance=4; controls.maxDistance=35;
+  scene.add(new THREE.AmbientLight(0xffffff,.65)); const dirLight=new THREE.DirectionalLight(0xffffff,.85); dirLight.position.set(6,10,8); scene.add(dirLight); const fillLight=new THREE.DirectionalLight(0x88bfff,.35); fillLight.position.set(-8,5,-6); scene.add(fillLight);
+  let gridHelper=null,borderLines=null,netGroup=null; const root=new THREE.Group(); scene.add(root); const moving=new THREE.Group(); root.add(moving); let activePosition=new THREE.Vector3(0,CONFIG.cubeHalf,0); const cellMaterials=[];
+  const unfoldedCells=[{id:1,name:"центр",pos:[0,0,0],color:0xffd166},{id:2,name:"+X",pos:[1,0,0],color:0x4da6ff},{id:3,name:"-X",pos:[-1,0,0],color:0x7dd3fc},{id:4,name:"+Y",pos:[0,1,0],color:0xa7f3d0},{id:5,name:"-Y",pos:[0,-1,0],color:0xfca5a5},{id:6,name:"+Z",pos:[0,0,1],color:0xc4b5fd},{id:7,name:"-Z",pos:[0,0,-1],color:0x93c5fd},{id:8,name:"внешн.",pos:[2,0,0],color:0xf9a8d4}];
+  const foldedCells=[{id:1,name:"центр",pos:[0,0,0],color:0xffd166},{id:2,name:"+X",pos:[.72,.24,0],color:0x4da6ff},{id:3,name:"-X",pos:[-.72,.24,0],color:0x7dd3fc},{id:4,name:"+Y",pos:[0,.95,0],color:0xa7f3d0},{id:5,name:"-Y",pos:[0,-.72,0],color:0xfca5a5},{id:6,name:"+Z",pos:[0,.24,.72],color:0xc4b5fd},{id:7,name:"-Z",pos:[0,.24,-.72],color:0x93c5fd},{id:8,name:"внешн.",pos:[1.28,.58,0],color:0xf9a8d4}];
+  function createTextTexture(lines,opt={}){const size=opt.size||256,canvas=document.createElement("canvas");canvas.width=size;canvas.height=size;const ctx=canvas.getContext("2d");ctx.clearRect(0,0,size,size);ctx.fillStyle=opt.color||"#fff";ctx.textAlign="center";ctx.textBaseline="middle";const arr=Array.isArray(lines)?lines:[String(lines)],main=opt.mainSize||96,sub=opt.subSize||30;if(arr.length===1){ctx.font=`800 ${main}px system-ui,sans-serif`;ctx.fillText(arr[0],size/2,size/2)}else{ctx.font=`800 ${main}px system-ui,sans-serif`;ctx.fillText(arr[0],size/2,size*.43);ctx.font=`600 ${sub}px system-ui,sans-serif`;ctx.fillText(arr[1],size/2,size*.67)}const tex=new THREE.CanvasTexture(canvas);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;return tex}
+  function createCell(cell){const group=new THREE.Group();const mat=new THREE.MeshPhongMaterial({color:cell.color,transparent:true,opacity:cell.id===1?Math.min(.48,cellOpacity+.16):cellOpacity,shininess:40,side:THREE.DoubleSide});cellMaterials.push(mat);const cube=new THREE.Mesh(new THREE.BoxGeometry(CONFIG.cubeSize,CONFIG.cubeSize,CONFIG.cubeSize),mat);group.add(cube);const edges=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(CONFIG.cubeSize,CONFIG.cubeSize,CONFIG.cubeSize)),new THREE.LineBasicMaterial({color:cell.id===1?0xffffff:cell.color,transparent:true,opacity:cell.id===1?.95:.72}));group.add(edges);const labelTexture=createTextTexture([String(cell.id),cell.name],{mainSize:104,subSize:28,color:"#fff"});const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture,transparent:true,depthTest:false}));sprite.scale.set(.54,.54,.54);group.add(sprite);return group}
+  function buildNet(){if(netGroup){moving.remove(netGroup);disposeObject(netGroup)}cellMaterials.length=0;netGroup=new THREE.Group();const cells=folded?foldedCells:unfoldedCells;for(const cell of cells){const g=createCell(cell);g.position.set(cell.pos[0],cell.pos[1],cell.pos[2]);netGroup.add(g)}moving.add(netGroup);setOpacity(cellOpacity)}
+  function disposeObject(obj){obj.traverse(child=>{if(child.geometry)child.geometry.dispose();if(child.material){const arr=Array.isArray(child.material)?child.material:[child.material];arr.forEach(m=>{if(m.map)m.map.dispose();m.dispose()})}})}
+  function rebuildField(){if(gridHelper)scene.remove(gridHelper);if(borderLines)scene.remove(borderLines);gridHelper=new THREE.GridHelper(gridSize,gridSize,0x6ea8d9,0x35516a);scene.add(gridHelper);const box=new THREE.BoxGeometry(gridSize,.02,gridSize),edges=new THREE.EdgesGeometry(box);borderLines=new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x7ac8ff,transparent:true,opacity:.55}));borderLines.position.y=.012;scene.add(borderLines)}
+  function centerCamera(){const dist=Math.max(8,gridSize*1.45);camera.position.set(-dist*.75,dist*.65,dist);camera.lookAt(0,.8,0);controls.target.set(0,.8,0);controls.update()}
+  function gridShift(){return gridSize%2===0?.5:0}
+  function resetState(){const s=gridShift();activePosition.set(s,CONFIG.cubeHalf,s);moving.position.copy(activePosition);moving.rotation.set(0,0,0);moving.quaternion.set(0,0,0,1);updateInfo()}
+  function inBounds(next){const limit=(gridSize-1)/2;return Math.abs(next.x)<=limit&&Math.abs(next.z)<=limit}
+  const moves={left:{dx:-1,dz:0,axis:new THREE.Vector3(0,0,1),pivotOffset:new THREE.Vector3(-.5,-.5,0)},right:{dx:1,dz:0,axis:new THREE.Vector3(0,0,-1),pivotOffset:new THREE.Vector3(.5,-.5,0)},forward:{dx:0,dz:-1,axis:new THREE.Vector3(-1,0,0),pivotOffset:new THREE.Vector3(0,-.5,-.5)},back:{dx:0,dz:1,axis:new THREE.Vector3(1,0,0),pivotOffset:new THREE.Vector3(0,-.5,.5)}};
+  function roll(moveName){if(isRolling)return;const move=moves[moveName];if(!move)return;const next={x:activePosition.x+move.dx,z:activePosition.z+move.dz};if(!inBounds(next))return;const pivotWorld=activePosition.clone().add(move.pivotOffset),pivot=new THREE.Object3D();pivot.position.copy(pivotWorld);scene.add(pivot);scene.remove(moving);pivot.add(moving);moving.position.sub(pivotWorld);isRolling=true;let accumulated=0;function animateRoll(){const step=Math.min(CONFIG.rollStep,CONFIG.rollAngle-accumulated);pivot.rotateOnAxis(move.axis,step);accumulated+=step;if(accumulated<CONFIG.rollAngle){requestAnimationFrame(animateRoll);return}moving.updateMatrixWorld(true);const worldPosition=new THREE.Vector3(),worldQuaternion=new THREE.Quaternion();moving.getWorldPosition(worldPosition);moving.getWorldQuaternion(worldQuaternion);pivot.remove(moving);scene.remove(pivot);scene.add(moving);activePosition.set(next.x,CONFIG.cubeHalf,next.z);moving.position.copy(activePosition);moving.quaternion.copy(worldQuaternion);isRolling=false;updateInfo()}animateRoll()}
+  function yaw(sign){if(isRolling)return;const q=new THREE.Quaternion();q.setFromAxisAngle(new THREE.Vector3(0,1,0),sign*Math.PI/2);moving.quaternion.premultiply(q);updateInfo()}
+  function applyGridSize(){const input=document.getElementById("gridSizeInput");let value=parseInt(input.value,10);if(Number.isNaN(value))return;value=Math.max(CONFIG.gridMin,Math.min(CONFIG.gridMax,value));if(value%2===0)value+=1;if(value>CONFIG.gridMax)value=CONFIG.gridMax;gridSize=value;input.value=String(gridSize);rebuildField();centerCamera();resetState()}
+  function setOpacity(value){cellOpacity=value;for(const mat of cellMaterials)mat.opacity=Math.min(.65,value);if(cellMaterials[0])cellMaterials[0].opacity=Math.min(.72,value+.16)}
+  function updateInfo(){const euler=new THREE.Euler().setFromQuaternion(moving.quaternion,"XYZ"),deg=v=>Math.round(v*180/Math.PI),el=document.getElementById("info");el.textContent=[`Позиция активной ячейки: x=${activePosition.x.toFixed(1)}, z=${activePosition.z.toFixed(1)}`,`Поле: ${gridSize} × ${gridSize}`,`Состояние развёртки: ${folded?"условно сложенная":"разложенная"}`,`Ориентация: X=${deg(euler.x)}°, Y=${deg(euler.y)}°, Z=${deg(euler.z)}°`,`Ячейки: 1 — центральная, 2..7 — соседние, 8 — дополнительная внешняя ячейка`,`Модель: интуитивная 3D-развёртка, не строгая 4D-проекция`].join("\n")}
+  function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}
+  document.querySelectorAll("button[data-move]").forEach(button=>button.addEventListener("click",()=>roll(button.dataset.move)));document.getElementById("restartBtn").addEventListener("click",resetState);document.getElementById("applyGridBtn").addEventListener("click",applyGridSize);document.getElementById("yawLeftBtn").addEventListener("click",()=>yaw(1));document.getElementById("yawRightBtn").addEventListener("click",()=>yaw(-1));document.getElementById("foldBtn").addEventListener("click",()=>{if(isRolling)return;folded=!folded;buildNet();updateInfo()});document.getElementById("speedInput").addEventListener("input",event=>{CONFIG.rollStep=parseFloat(event.target.value)});document.getElementById("opacityInput").addEventListener("input",event=>{setOpacity(parseFloat(event.target.value))});
+  window.addEventListener("keydown",event=>{if(event.repeat)return;if(event.key==="ArrowLeft")roll("left");if(event.key==="ArrowRight")roll("right");if(event.key==="ArrowUp")roll("forward");if(event.key==="ArrowDown")roll("back");if(event.key==="a"||event.key==="A")yaw(1);if(event.key==="d"||event.key==="D")yaw(-1);if(event.key==="r"||event.key==="R")resetState()});
+  window.addEventListener("resize",()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight)});
+  buildNet();rebuildField();centerCamera();resetState();setOpacity(cellOpacity);animate();
   </script>
 </body>
 </html>
