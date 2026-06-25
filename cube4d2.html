@@ -184,46 +184,57 @@ Good places for future work
 
   Codex note:
   - Desktop and mobile layouts share the same DOM.
-  - The mobile behavior is mostly controlled by @media(max-width:800px).
+  - The responsive control surface is CSS-driven and does not affect movement state.
   - The UI button toggles body.ui-hidden, hiding #panel without affecting the scene.
 */
-:root{--bg0:#0d1117;--bg1:#172033;--panel:rgba(8,12,20,.91);--text:#eaf3ff;--muted:#abc2dc;--accent:#4da6ff;--gold:#ffd166}
+:root{--bg0:#0d1117;--bg1:#172033;--panel:rgba(8,12,20,.92);--panel2:rgba(22,31,48,.82);--line:rgba(151,190,235,.24);--text:#eaf3ff;--muted:#abc2dc;--accent:#4da6ff;--gold:#d69e2e;--green:#14815f;--danger:#475569}
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:radial-gradient(circle at 18% 16%,#263a60 0%,transparent 42%),radial-gradient(circle at 84% 78%,#1d304d 0%,transparent 45%),linear-gradient(140deg,var(--bg0),var(--bg1));color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-#panel{position:absolute;top:12px;right:12px;z-index:5;width:min(500px,calc(100vw - 24px));padding:12px;border-radius:12px;background:var(--panel);border:1px solid rgba(125,190,255,.25);box-shadow:0 12px 32px rgba(0,0,0,.35);display:grid;gap:10px;backdrop-filter:blur(8px)}
-#uiToggle{position:absolute;left:10px;top:10px;z-index:6;width:auto;min-height:34px;padding:0 12px;background:#334155}
+#panel{position:absolute;top:12px;right:12px;z-index:5;width:min(420px,calc(100vw - 24px));padding:12px;border-radius:12px;background:var(--panel);border:1px solid var(--line);box-shadow:0 12px 32px rgba(0,0,0,.35);display:grid;grid-template-columns:1fr;gap:10px;backdrop-filter:blur(10px)}
+#uiToggle{position:absolute;left:10px;top:10px;z-index:6;width:auto;min-width:46px;min-height:36px;padding:0 12px;border:0;border-radius:9px;background:#334155;color:white;font-weight:800;cursor:pointer}
 body.ui-hidden #panel{display:none}
-h1{margin:0;font-size:16px;line-height:1.25}
-.hint,#info{font-size:12px;line-height:1.4;color:#cfe4ff;white-space:pre-line}
-.row{display:flex;gap:6px}
-button{flex:1;min-height:36px;border:0;border-radius:8px;background:var(--accent);color:white;font-weight:700;cursor:pointer;font-size:13px}
-button.secondary{background:#334155}
-button.gold{background:#b7791f}
-button.green{background:#14815f}
-button:disabled{opacity:.45;cursor:not-allowed}
-label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#cfe4ff;font-size:12px}
-input[type=number]{width:72px}
-#info{font-size:12px;line-height:1.35;color:#cfe4ff;white-space:pre-line}
+.control-section{display:grid;gap:6px}
+.move-pad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"up up up" "left forward right" "down back back";gap:6px}
+#btnUp{grid-area:up}#btnLeft{grid-area:left}#btnForward{grid-area:forward}#btnRight{grid-area:right}#btnDown{grid-area:down}#btnBack{grid-area:back}
+.actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.settings{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.field-control{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+button{min-height:40px;border:0;border-radius:8px;background:var(--accent);color:white;font-weight:800;cursor:pointer;font-size:13px;line-height:1.05;padding:0 10px}
+button.secondary{background:var(--danger)}
+button.gold{background:var(--gold)}
+button.green{background:var(--green)}
+button:disabled{opacity:.42;cursor:not-allowed}
+label{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:38px;padding:0 9px;border-radius:8px;background:var(--panel2);border:1px solid rgba(151,190,235,.14);color:#dbeafe;font-size:12px;font-weight:700}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,.28);border-radius:8px;background:#101827;color:var(--text);font-size:16px;font-weight:800;text-align:center}
+#info{font-size:12px;line-height:1.35;color:#cfe4ff;white-space:pre-line;padding:8px;border-radius:8px;background:rgba(8,12,20,.45);border:1px solid rgba(151,190,235,.12)}
 @media(max-width:800px){
   body{touch-action:none}
-  #uiToggle{left:calc(8px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top));min-width:52px;min-height:40px;padding:0 12px;border-radius:10px;font-size:12px;opacity:.88;box-shadow:0 8px 20px rgba(0,0,0,.28)}
-  #panel{left:calc(6px + env(safe-area-inset-left));right:calc(6px + env(safe-area-inset-right));top:auto;bottom:calc(6px + env(safe-area-inset-bottom));width:auto;max-height:min(46svh,360px);overflow:auto;padding:8px;border-radius:12px;gap:6px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
-  #panel .row{display:contents}
-  #panel .row button{width:100%}
-  button{min-height:38px;border-radius:8px;font-size:12px;padding:0 6px;line-height:1.05}
-  label{grid-column:span 1;font-size:11px;min-height:34px;padding:0 6px;border-radius:8px;background:rgba(148,180,220,.10)}
-  input[type=number]{width:60px;min-height:28px;font-size:16px}
-  #info{grid-column:1 / -1;font-size:10px;line-height:1.18;max-height:48px;overflow:hidden;opacity:.78}
+  #uiToggle{left:calc(8px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top));min-width:52px;min-height:42px;padding:0 12px;border-radius:11px;font-size:12px;opacity:.9;box-shadow:0 8px 20px rgba(0,0,0,.28)}
+  #panel{left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));top:auto;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:min(50svh,380px);overflow:auto;padding:9px;border-radius:14px;gap:7px;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);align-items:stretch}
+  .move-pad{grid-row:span 3;grid-template-rows:repeat(3,minmax(42px,1fr));height:100%}
+  .actions,.settings,.field-control{grid-template-columns:1fr;gap:6px}
+  button{min-height:42px;border-radius:10px;font-size:12px;padding:0 6px}
+  label{min-height:38px;font-size:11px;padding:0 8px}
+  input[type=number]{width:100%;min-height:38px}
+  #info{grid-column:1 / -1;font-size:10px;line-height:1.18;max-height:50px;overflow:hidden;padding:7px;opacity:.82}
 }
-@media(max-width:420px){
-  #panel{max-height:min(42svh,320px);gap:5px;padding:7px}
-  button{font-size:11px;min-height:36px;padding:0 4px}
-  label{min-height:32px;font-size:10px}
+@media(max-width:480px){
+  #panel{max-height:min(48svh,350px);grid-template-columns:1fr 1fr;gap:6px;padding:7px}
+  .move-pad{grid-template-rows:repeat(3,38px)}
+  button{min-height:38px;font-size:11px;padding:0 4px}
+  label{min-height:34px;font-size:10px}
+  input[type=number]{min-height:34px;font-size:15px}
   #info{display:none}
 }
 @media(max-width:360px){
-  #panel{max-height:40svh}
-  button{font-size:10px;min-height:34px}
+  #panel{max-height:44svh}
+  .move-pad{grid-template-rows:repeat(3,34px)}
+  button{min-height:34px;font-size:10px}
+}
+@media(orientation:landscape) and (max-height:520px){
+  #panel{top:calc(8px + env(safe-area-inset-top));bottom:auto;left:auto;right:calc(8px + env(safe-area-inset-right));width:min(46vw,420px);max-height:calc(100svh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+  #info{display:none}
 }
 </style>
 </head>
@@ -234,17 +245,29 @@ input[type=number]{width:72px}
   - #panel contains movement buttons, path/field toggles, field size, and compact state readout.
   - The Three.js canvas is inserted by JavaScript below.
 -->
-<button id="uiToggle">UI</button>
+<button id="uiToggle" aria-label="Показать или скрыть панель">UI</button>
 <div id="panel">
-<div class="row"><button data-axis="0" data-sign="-1" id="btnLeft">ВЛЕВО</button><button data-axis="0" data-sign="1" id="btnRight">ВПРАВО</button></div>
-<div class="row"><button data-axis="1" data-sign="1" id="btnUp">ВВЕРХ</button><button data-axis="1" data-sign="-1" id="btnDown">ВНИЗ</button></div>
-<div class="row"><button data-axis="2" data-sign="1" id="btnForward">ВПЕРЁД</button><button data-axis="2" data-sign="-1" id="btnBack">НАЗАД</button></div>
-<div class="row"><button id="undoBtn" class="green">Назад</button><button id="resetBtn" class="secondary">Сброс</button></div>
-<div class="row"><button id="toggleFieldBtn" class="secondary">Поле</button></div>
-<label><span>Путь</span><input id="trailCheckbox" type="checkbox" checked></label>
-<label><span>Поле</span><input id="fieldSizeInput" type="number" min="3" max="9" step="2" value="5"></label>
-<div class="row"><button id="applyFieldBtn" class="gold">Применить</button></div>
-<div id="info"></div>
+  <div class="control-section move-pad">
+    <button data-axis="1" data-sign="1" id="btnUp">↑ Вверх</button>
+    <button data-axis="0" data-sign="-1" id="btnLeft">← Влево</button>
+    <button data-axis="2" data-sign="1" id="btnForward">Вперёд</button>
+    <button data-axis="0" data-sign="1" id="btnRight">Вправо →</button>
+    <button data-axis="1" data-sign="-1" id="btnDown">↓ Вниз</button>
+    <button data-axis="2" data-sign="-1" id="btnBack">Назад</button>
+  </div>
+  <div class="control-section actions">
+    <button id="undoBtn" class="green">Отмена</button>
+    <button id="resetBtn" class="secondary">Сброс</button>
+    <button id="toggleFieldBtn" class="secondary">Поле</button>
+  </div>
+  <div class="control-section settings">
+    <label><span>Путь</span><input id="trailCheckbox" type="checkbox"></label>
+    <label><span>Размер</span><input id="fieldSizeInput" type="number" min="3" max="9" step="2" value="7"></label>
+  </div>
+  <div class="control-section field-control">
+    <button id="applyFieldBtn" class="gold">Применить</button>
+  </div>
+  <div id="info"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -341,13 +364,13 @@ const dirVectors = [
 
 const axisNames = ["X", "Y", "Z"];
 
-let fieldSize = 5;
+let fieldSize = 7;
 let fogStrength = 0.00;
 let state = null;
 let history = [];
 let busy = false;
 let edgesVisible = false;
-let trailVisible = true;
+let trailVisible = false;
 let fieldVisible = true;
 
 const scene = new THREE.Scene();
@@ -889,18 +912,17 @@ function applyStateVisual(s){
 
 function updateButtons(){
   const labels = [
-    ["btnLeft", 0, -1, "ВЛЕВО"],
-    ["btnRight", 0, 1, "ВПРАВО"],
-    ["btnUp", 1, 1, "ВВЕРХ"],
-    ["btnDown", 1, -1, "ВНИЗ"],
-    ["btnForward", 2, 1, "ВПЕРЁД"],
-    ["btnBack", 2, -1, "НАЗАД"]
+    ["btnLeft", 0, -1, "← Влево"],
+    ["btnRight", 0, 1, "Вправо →"],
+    ["btnUp", 1, 1, "↑ Вверх"],
+    ["btnDown", 1, -1, "↓ Вниз"],
+    ["btnForward", 2, 1, "Вперёд"],
+    ["btnBack", 2, -1, "Назад"]
   ];
   for(const [id, axis, sign, txt] of labels){
     const b = document.getElementById(id);
-    const target = sign > 0 ? state.axes[axis].plus : state.axes[axis].minus;
     const nextField = objToVec(state.field).add(dirVectors[axis].clone().multiplyScalar(sign));
-    b.textContent = `${txt} ${state.active}→${target}`;
+    b.textContent = txt;
     b.disabled = busy || !inBounds(nextField);
   }
 }
@@ -1260,7 +1282,7 @@ function updateInfo(move=null){
     `X +${state.axes[0].plus}  -${state.axes[0].minus}`,
     `Y +${state.axes[1].plus}  -${state.axes[1].minus}`,
     `Z +${state.axes[2].plus}  -${state.axes[2].minus}`,
-    state.path.join(" → ")
+    state.path.join(", ")
   ].join("\n");
 }
 
