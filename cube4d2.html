@@ -1,14 +1,198 @@
 <!DOCTYPE html>
+
+<!--
+================================================================================
+4D CUBE ROLLER — UNIVERSAL MOBILE BUILD, ANNOTATED FOR HUMAN + CODEX AGENT
+================================================================================
+
+Purpose
+-------
+This file is a self-contained Three.js prototype for visualizing a rolling
+4-dimensional cube (tesseract) as a local 3D unfolding.
+
+It is intended to be readable by:
+1. a human continuing the mathematical design;
+2. a Codex/code agent making incremental edits without losing the conceptual
+   model.
+
+High-level concept
+------------------
+A tesseract has 8 cubic cells. At every moment we display a local 3D unfolding
+around one "active" cubic cell:
+
+    active cell:          center of the visible local unfolding
+    six neighbor cells:   one in each local ±X, ±Y, ±Z direction
+    one external cell:    the cell opposite the active cell, not currently drawn
+
+The visual object can move through a 3D field. The active cell has a field
+coordinate (x, y, z). The visible local unfolding is placed around that field
+coordinate.
+
+Current numbering scheme
+------------------------
+Cells are numbered 0..7.
+
+    0 is the initial central/active cell.
+    7 is the initial external/opposite cell.
+
+Initial local neighbor numbering follows the "game die" style adopted in the
+conversation:
+
+    +X / right:    3
+    -X / left:     4
+
+    +Y / up:       1
+    -Y / down:     6
+
+    +Z / forward:  2
+    -Z / back:     5
+
+Opposite pairs:
+
+    0 <-> 7
+    1 <-> 6
+    2 <-> 5
+    3 <-> 4
+
+Important: The visible 3D axis called +Z is intentionally represented as
+negative world Z in Three.js, because "forward" means into the screen/camera
+view in this prototype.
+
+Universal transition rule A -> B
+--------------------------------
+The user can move from the active cell A to any of its six visible neighbors B.
+For any such move:
+
+    A = old active cell
+    B = new active cell
+    enter = opposite(A)       // old external cell enters the new unfolding
+    out   = opposite(B)       // this cell leaves the unfolding and becomes external
+
+The four rotating/spinning cells are the cells that are common neighbors of A
+and B. In the local axes representation this is simply the four cells on the
+two axes not used by the move.
+
+Example: moving along the Y axis, the spinners are the ±X and ±Z cells.
+
+External-cell orientation rule
+------------------------------
+Earlier versions tried to handle the entering/outgoing external cell through
+literal mirror reflections. That creates left-handed transforms / negative
+scale, which is hard to reason about and can break face orientation.
+
+The current version uses a cleaner rule:
+
+    - when a cell leaves the unfolding and becomes external, we store the normal
+      of the detaching face in state.pendingNormals[out];
+
+    - when that same cell later returns from external state, we combine:
+          reflection over old detaching face
+          reflection over new attaching face
+      into one proper rotation quaternion.
+
+Mathematically, composition of two reflections is an orientation-preserving
+motion. For this visualization we use only the rotational part around the cube
+center.
+
+Relevant function:
+    rotationFromTwoReflections(detachNormalObj, attachNormal)
+
+Persistent cube orientation
+---------------------------
+Every cube stores its current orientation in:
+
+    state.orientations[id] = {x, y, z, w}
+
+These are regular quaternions. Do not reset them after a move unless the design
+explicitly requires a new convention.
+
+The marks on the cube faces make orientation errors visible:
+
+    top face in initial orientation:       ○
+    bottom face in initial orientation:    □
+    left face in initial orientation:      ✕
+    right face in initial orientation:     △
+    remaining side faces:                  cube number
+
+This is intentional. If face marks behave strangely, the problem is usually in
+orientation storage or the external-cell entering/leaving rule.
+
+Rendering notes
+---------------
+- Cubes are opaque.
+- Cube numbers/marks are textures attached to faces, not floating sprites.
+- Red circles on the field walls are projections of the active cube center.
+- The internal coordinate grid was removed; only the field boundary box remains.
+- Mobile layout includes a compact bottom panel and a UI toggle button.
+
+Codex-agent editing guidelines
+------------------------------
+Prefer small edits and preserve these invariants:
+
+1. Cell IDs must remain 0..7.
+2. opposite must remain a perfect involution:
+       opposite[opposite[id]] === id
+3. state.axes must always contain exactly six non-active, non-external neighbor
+   cells arranged in three plus/minus pairs.
+4. externalCell(state) must be opposite[state.active].
+5. A visible move must satisfy:
+       B is one of state.axes[axisIndex].plus/minus
+       enter = opposite[A]
+       out = opposite[B]
+6. Do not silently reset state.orientations after a move.
+7. Do not reintroduce negative scale unless the mirror-reflection model is
+   intentionally restored and documented.
+8. If you change the external-cell rule, update both:
+       makeNextState()
+       runMove()
+       recenterPhase()
+9. If you change face textures or cube materials, preserve orientation markers
+   unless explicitly asked to remove them.
+10. Keep this file runnable as a single standalone HTML file.
+
+Good places for future work
+---------------------------
+- External-cell rule experiments:
+      rotationFromTwoReflections()
+      pendingNormals handling in runMove()
+- Face marker / texture design:
+      makeFaceTexture()
+      makeMarkerTexture()
+      createCell()
+- Mobile controls:
+      CSS media queries
+      #uiToggle handler
+- Field visualization:
+      rebuildField()
+      rebuildProjections()
+- Move logic:
+      makeNextState()
+      commonSpinners()
+      runMove()
+
+================================================================================
+-->
+
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>4D cube roller v8k — fog control and wall projections</title>
+<title>4D cube roller — universal mobile annotated for Codex</title>
 <style>
+/*
+  CSS is intentionally kept in this file to preserve the one-file prototype.
+
+  Codex note:
+  - Desktop and mobile layouts share the same DOM.
+  - The mobile behavior is mostly controlled by @media(max-width:800px).
+  - The UI button toggles body.ui-hidden, hiding #panel without affecting the scene.
+*/
 :root{--bg0:#0d1117;--bg1:#172033;--panel:rgba(8,12,20,.91);--text:#eaf3ff;--muted:#abc2dc;--accent:#4da6ff;--gold:#ffd166}
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:radial-gradient(circle at 18% 16%,#263a60 0%,transparent 42%),radial-gradient(circle at 84% 78%,#1d304d 0%,transparent 45%),linear-gradient(140deg,var(--bg0),var(--bg1));color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 #panel{position:absolute;top:12px;right:12px;z-index:5;width:min(500px,calc(100vw - 24px));padding:12px;border-radius:12px;background:var(--panel);border:1px solid rgba(125,190,255,.25);box-shadow:0 12px 32px rgba(0,0,0,.35);display:grid;gap:10px;backdrop-filter:blur(8px)}
+#uiToggle{position:absolute;left:10px;top:10px;z-index:6;width:auto;min-height:34px;padding:0 12px;background:#334155}
+body.ui-hidden #panel{display:none}
 h1{margin:0;font-size:16px;line-height:1.25}
 .hint,#info{font-size:12px;line-height:1.4;color:#cfe4ff;white-space:pre-line}
 .row{display:flex;gap:6px}
@@ -20,10 +204,31 @@ button:disabled{opacity:.45;cursor:not-allowed}
 label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#cfe4ff;font-size:12px}
 input[type=number]{width:72px}
 #info{font-size:12px;line-height:1.35;color:#cfe4ff;white-space:pre-line}
-@media(max-width:800px){#panel{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:64vh;overflow:auto}}
+@media(max-width:800px){
+  body{touch-action:none}
+  #uiToggle{left:8px;top:8px;min-height:32px;padding:0 10px;font-size:12px;opacity:.82}
+  #panel{left:6px;right:6px;top:auto;bottom:6px;width:auto;max-height:42vh;overflow:auto;padding:8px;border-radius:12px;gap:6px}
+  .row{gap:5px}
+  button{min-height:32px;border-radius:7px;font-size:11px;padding:0 4px}
+  label{font-size:11px;min-height:28px}
+  input[type=number]{width:56px}
+  #info{font-size:10px;line-height:1.18;max-height:54px;overflow:hidden;opacity:.78}
+}
+@media(max-width:420px){
+  #panel{max-height:38vh}
+  button{font-size:10px;min-height:30px}
+  #info{display:none}
+}
 </style>
 </head>
 <body>
+<!--
+  UI structure:
+  - #uiToggle hides/shows the full control panel on small screens.
+  - #panel contains movement buttons, path/field toggles, field size, and compact state readout.
+  - The Three.js canvas is inserted by JavaScript below.
+-->
+<button id="uiToggle">UI</button>
 <div id="panel">
 <div class="row"><button data-axis="0" data-sign="-1" id="btnLeft">ВЛЕВО</button><button data-axis="0" data-sign="1" id="btnRight">ВПРАВО</button></div>
 <div class="row"><button data-axis="1" data-sign="1" id="btnUp">ВВЕРХ</button><button data-axis="1" data-sign="-1" id="btnDown">ВНИЗ</button></div>
@@ -31,7 +236,6 @@ input[type=number]{width:72px}
 <div class="row"><button id="undoBtn" class="green">Назад</button><button id="resetBtn" class="secondary">Сброс</button></div>
 <div class="row"><button id="toggleFieldBtn" class="secondary">Поле</button></div>
 <label><span>Путь</span><input id="trailCheckbox" type="checkbox" checked></label>
-<label><span>Туман</span><input id="fogStrengthInput" type="range" min="0" max="100" step="1" value="60"></label>
 <label><span>Поле</span><input id="fieldSizeInput" type="number" min="3" max="9" step="2" value="5"></label>
 <div class="row"><button id="applyFieldBtn" class="gold">Применить</button></div>
 <div id="info"></div>
@@ -42,8 +246,66 @@ input[type=number]{width:72px}
 <script>
 "use strict";
 
+/*
+  ============================================================================
+  JAVASCRIPT ARCHITECTURE OVERVIEW
+  ============================================================================
+
+  Data model:
+    state.active
+      Current central/active tesseract cell.
+
+    state.axes
+      Three local axis pairs around the active cell:
+        axes[0] = local X pair
+        axes[1] = local Y pair
+        axes[2] = local Z pair
+
+      Each pair has:
+        { plus: cellId, minus: cellId }
+
+    state.field
+      Position of the active cell in the external 3D field.
+
+    state.path
+      Sequence of active cell IDs visited.
+
+    state.fieldPath
+      Sequence of 3D field coordinates visited.
+
+    state.orientations
+      Persistent quaternion orientation for each cubic cell.
+
+    state.pendingNormals
+      For a cell currently outside the local unfolding, this may store the
+      normal of the face through which it left. When the cell re-enters, this is
+      combined with the new attaching normal into one rotation.
+
+  Rendering model:
+    cells Map<id, THREE.Group>
+      Each group contains:
+        - body mesh with six face materials
+        - edge lines
+        - old hidden label sprite kept only to avoid rewriting older code paths
+
+  Movement:
+    runMove(axisIndex, sign)
+      Drives one complete move:
+        1. validates bounds,
+        2. derives A, B, enter, out,
+        3. animates the four common-neighbor spinners,
+        4. fades entering/outgoing cubes,
+        5. stores final orientations,
+        6. applies the next state.
+*/
+
+// Universal mobile build: arbitrary A→B moves, persistent orientations, external rotation rule.
+
+// Cube size and spacing. spacing = 1.0 means neighboring cubic cells touch exactly.
 const spacing = 1.0;
+// Half-size of one cube. Used for rotation pivots along shared edges/faces.
 const h = 0.5;
+// Angular step per animation frame. Lower value = slower/smoother rolling.
 const rollStep = 0.045;
 
 const colors = {
@@ -53,6 +315,14 @@ const colors = {
 
 const allIds = [0,1,2,3,4,5,6,7];
 // Противоположности по новой схеме: 0↔7, 1↔6, 2↔5, 3↔4.
+/*
+  Opposite-cell map.
+
+  This must remain an involution:
+      opposite[opposite[id]] === id
+
+  It defines which cell is hidden/external for a given active cell.
+*/
 const opposite = {0:7,7:0,1:6,6:1,2:5,5:2,3:4,4:3};
 
 // Visual/world axes.
@@ -66,7 +336,7 @@ const dirVectors = [
 const axisNames = ["X", "Y", "Z"];
 
 let fieldSize = 5;
-let fogStrength = 0.60;
+let fogStrength = 0.00;
 let state = null;
 let history = [];
 let busy = false;
@@ -78,7 +348,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, .1, 1000);
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 800 ? 1.35 : 2));
 renderer.setClearColor(0x111827, 1);
 document.body.appendChild(renderer.domElement);
 
@@ -94,9 +364,25 @@ const fill = new THREE.DirectionalLight(0x88bfff, .32);
 fill.position.set(-8,5,-7);
 scene.add(fill);
 
-camera.position.set(-7.5,6.5,9.2);
-controls.target.set(0,.4,0);
-camera.lookAt(controls.target);
+/*
+  setCameraForViewport()
+
+  Chooses a different starting camera for desktop and smartphone screens.
+  This is purely visual and does not affect the model.
+*/
+function setCameraForViewport(){
+  if(innerWidth < 800){
+    camera.position.set(-4.6, 3.7, 6.0);
+    camera.fov = 56;
+  } else {
+    camera.position.set(-7.5, 6.5, 9.2);
+    camera.fov = 48;
+  }
+  camera.updateProjectionMatrix();
+  controls.target.set(0,.25,0);
+  camera.lookAt(controls.target);
+}
+setCameraForViewport();
 
 const cells = new Map();
 const edgeGroup = new THREE.Group();
@@ -134,16 +420,122 @@ function objToVec(o){
   return new THREE.Vector3(o.x, o.y, o.z);
 }
 
+function identityOrientations(){
+  const map = {};
+  for(const id of allIds) map[id] = {x:0,y:0,z:0,w:1};
+  return map;
+}
+
+function cloneOrientations(orientations){
+  const out = {};
+  for(const id of allIds){
+    const q = orientations?.[id] || {x:0,y:0,z:0,w:1};
+    out[id] = {x:q.x, y:q.y, z:q.z, w:q.w};
+  }
+  return out;
+}
+
+function quatToObj(q){
+  return {x:q.x, y:q.y, z:q.z, w:q.w};
+}
+
+function objToQuat(o){
+  return new THREE.Quaternion(o.x, o.y, o.z, o.w);
+}
+
+function identityPendingNormals(){
+  const map = {};
+  for(const id of allIds) map[id] = null;
+  return map;
+}
+
+function clonePendingNormals(pending){
+  const out = {};
+  for(const id of allIds){
+    const n = pending?.[id] || null;
+    out[id] = n ? {x:n.x, y:n.y, z:n.z} : null;
+  }
+  return out;
+}
+
+function reflectionLinearMatrix(normal){
+  const n = normal.clone().normalize();
+  const nx = n.x, ny = n.y, nz = n.z;
+  return new THREE.Matrix4().set(
+    1 - 2*nx*nx,    -2*nx*ny,    -2*nx*nz, 0,
+       -2*ny*nx, 1 - 2*ny*ny,    -2*ny*nz, 0,
+       -2*nz*nx,    -2*nz*ny, 1 - 2*nz*nz, 0,
+              0,           0,           0, 1
+  );
+}
+
+/*
+  rotationFromTwoReflections(detachNormalObj, attachNormal)
+
+  Core of the current external-cell rule.
+
+  Conceptual model:
+      A cube leaving the local unfolding would be mirrored across the detaching
+      face plane. When it later returns, it would be mirrored again across the
+      attaching face plane.
+
+  Instead of storing negative scale or an actual mirror, we replace the pair of
+  reflections by one proper rotation quaternion:
+      R = Reflect(attach) * Reflect(detach)
+
+  If detachNormalObj is null, the cube has no remembered detaching face, so the
+  function returns identity.
+*/
+function rotationFromTwoReflections(detachNormalObj, attachNormal){
+  // Две зеркальные симметрии заменяются одним собственным поворотом:
+  // Q = Reflect(attach) * Reflect(detach).
+  // Если кубик был внешним с самого начала и не имеет detachNormal,
+  // дополнительный поворот не нужен.
+  if(!detachNormalObj) return new THREE.Quaternion();
+
+  const nDetach = objToVec(detachNormalObj).normalize();
+  const nAttach = attachNormal.clone().normalize();
+
+  const mDetach = reflectionLinearMatrix(nDetach);
+  const mAttach = reflectionLinearMatrix(nAttach);
+  const m = mAttach.multiply(mDetach);
+
+  return new THREE.Quaternion().setFromRotationMatrix(m).normalize();
+}
+
+/*
+  cloneState()
+
+  Used by the undo history. It must deep-copy every logical part of state.
+  If a new state field is added later, add it here as well, otherwise Undo will
+  become inconsistent.
+*/
 function cloneState(s){
   return {
     active: s.active,
     axes: cloneAxes(s.axes),
     field: {...s.field},
     path: [...s.path],
-    fieldPath: s.fieldPath.map(p => ({...p}))
+    fieldPath: s.fieldPath.map(p => ({...p})),
+    orientations: cloneOrientations(s.orientations),
+    pendingNormals: clonePendingNormals(s.pendingNormals)
   };
 }
 
+/*
+  initialState()
+
+  Defines the initial local unfolding around cell 0.
+
+  The adopted direction mapping is:
+      right  = 3
+      left   = 4
+      up     = 1
+      down   = 6
+      forward= 2
+      back   = 5
+      external opposite = 7
+*/
 function initialState(){
   return {
     active: 0,
@@ -154,10 +546,18 @@ function initialState(){
     ],
     field: {x:0, y:0, z:0},
     path: [0],
-    fieldPath: [{x:0,y:0,z:0}]
+    fieldPath: [{x:0,y:0,z:0}],
+    orientations: identityOrientations(),
+    pendingNormals: identityPendingNormals()
   };
 }
 
+/*
+  externalCell(state)
+
+  The one cell not drawn in the current local unfolding.
+  It is always opposite(active).
+*/
 function externalCell(s){
   return opposite[s.active];
 }
@@ -173,49 +573,52 @@ function fieldVec(s){
 function fogStrengthAt(pos, center=null){
   const c = center || fieldVec(state);
   const d = pos.distanceTo(c);
-  const near = 0.15;
-  const far = 4.2;
+  const near = 0.0;
+  const far = 2.25;
   const t = Math.max(0, Math.min(1, (d - near) / (far - near)));
-  return 1 - fogStrength * t * t;
+  return Math.max(0.10, 1 - fogStrength * t);
 }
 
 function applyLocalFog(){
   if(!state) return;
-  const center = fieldVec(state);
 
   for(const id of allIds){
     const g = cells.get(id);
     const isExternal = id === externalCell(state);
     if(!g || isExternal || !g.visible) continue;
-    const fog = fogStrengthAt(g.position, center);
     const ed = g.getObjectByName("edges");
-    const labelSprite = g.getObjectByName("label");
-    ed.material.opacity = 0.75 * fog;
-    labelSprite.material.opacity = fog;
+    const baseOpacity = g.userData.baseEdgeOpacity ?? 0.70;
+    const baseColor = g.userData.baseEdgeColor ?? 0xaebdca;
+    ed.material.color.set(baseColor);
+    ed.material.opacity = baseOpacity;
   }
 
   const fg = fieldGroup.children;
-  if(fg[0] && fg[0].material) fg[0].material.opacity = 0.16 * (1 - 0.35 * fogStrength);
-  if(fg[1] && fg[1].material) fg[1].material.opacity = 0.45 * (1 - 0.20 * fogStrength);
+  if(fg[0] && fg[0].material) fg[0].material.opacity = 0.52;
 
   for(const child of trailGroup.children){
     if(child.isMesh){
-      const fog = fogStrengthAt(child.position, center);
       child.material.transparent = true;
-      child.material.opacity = 0.9 * fog;
+      child.material.opacity = 0.9;
     } else if(child.isLine){
       child.material.transparent = true;
-      child.material.opacity = 0.55 * (1 - 0.25 * fogStrength);
+      child.material.opacity = 0.45;
     }
   }
 
   for(const child of projectionGroup.children){
-    const fog = fogStrengthAt(child.position, center);
     child.material.transparent = true;
-    child.material.opacity = 0.95 * fog;
+    child.material.opacity = 0.95;
   }
 }
 
+/*
+  rebuildProjections()
+
+  Draws red circular projections of the active cube center onto all six walls
+  of the 3D field. These markers are intentionally flat wall circles and help
+  understand the active coordinate inside the volume.
+*/
 function rebuildProjections(){
   clearGroup(projectionGroup);
   if(!state || !fieldVisible) return;
@@ -295,25 +698,106 @@ function makeTex(lines, main=96, sub=26){
   return t;
 }
 
-function setLabel(id,line){
-  const s=cells.get(id).getObjectByName("label");
-  if(s.material.map) s.material.map.dispose();
-  s.material.map = makeTex(String(id));
-  s.material.needsUpdate = true;
+/*
+  makeFaceTexture(id)
+
+  Creates the texture used on ordinary numbered faces. The texture is attached
+  directly to cube faces, not rendered as a separate floating sprite.
+*/
+function makeFaceTexture(id){
+  const c=document.createElement("canvas");
+  c.width=c.height=256;
+  const x=c.getContext("2d");
+  x.fillStyle="#d9e2eb";
+  x.fillRect(0,0,256,256);
+  x.fillStyle="#203040";
+  x.textAlign="center";
+  x.textBaseline="middle";
+  x.font='700 120px system-ui';
+  x.fillText(String(id),128,132);
+  const t=new THREE.CanvasTexture(c);
+  t.minFilter=THREE.LinearFilter;
+  t.magFilter=THREE.LinearFilter;
+  return t;
 }
 
+/*
+  makeMarkerTexture(symbol)
+
+  Creates orientation diagnostic marks:
+      ○ initial top
+      □ initial bottom
+      ✕ initial left
+      △ initial right
+
+  These marks are important for debugging whether orientation persists correctly
+  through rolling and external-cell transitions.
+*/
+function makeMarkerTexture(symbol){
+  const c=document.createElement("canvas");
+  c.width=c.height=256;
+  const x=c.getContext("2d");
+  x.fillStyle="#d9e2eb";
+  x.fillRect(0,0,256,256);
+  x.fillStyle="#203040";
+  x.textAlign="center";
+  x.textBaseline="middle";
+  x.font='700 140px system-ui';
+  x.fillText(symbol,128,132);
+  const t=new THREE.CanvasTexture(c);
+  t.minFilter=THREE.LinearFilter;
+  t.magFilter=THREE.LinearFilter;
+  return t;
+}
+
+function setCubeOpacity(group, opacity){
+  const body = group.getObjectByName("body");
+  if(!body) return;
+  const mats = Array.isArray(body.material) ? body.material : [body.material];
+  for(const m of mats){
+    m.transparent = opacity < 0.999;
+    m.opacity = opacity;
+  }
+}
+
+function setLabel(id,line){
+  return;
+}
+
+/*
+  createCell(id)
+
+  Builds one cube cell as a THREE.Group.
+
+  Face material order for THREE.BoxGeometry is:
+      +X, -X, +Y, -Y, +Z, -Z
+
+  Current face assignment:
+      +X right  -> △
+      -X left   -> ✕
+      +Y top    -> ○
+      -Y bottom -> □
+      ±Z        -> cell number
+
+  The hidden label sprite is legacy-compatible scaffolding. It is kept invisible.
+*/
 function createCell(id){
   const g = new THREE.Group();
   g.userData.id = id;
 
-  const bodyMat = new THREE.MeshPhongMaterial({
-    color: colors[id],
-    transparent: true,
-    opacity: .30,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-    shininess: 45
-  });
+  const sideTexture = makeFaceTexture(id);
+  const topTexture = makeMarkerTexture("○");
+  const bottomTexture = makeMarkerTexture("□");
+  const rightTexture = makeMarkerTexture("△");
+  const leftTexture = makeMarkerTexture("✕");
+  const bodyMat = [
+    new THREE.MeshPhongMaterial({color: colors[id], map: rightTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: leftTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: topTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: bottomTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: sideTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: sideTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35})
+  ];
 
   const cube = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), bodyMat);
   cube.name = "body";
@@ -329,10 +813,12 @@ function createCell(id){
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({
     map: makeTex(String(id)),
     transparent: true,
-    depthTest: false
+    depthTest: false,
+    opacity: 0
   }));
   sp.name = "label";
-  sp.scale.set(.54,.54,.54);
+  sp.visible = false;
+  sp.scale.set(.01,.01,.01);
   g.add(sp);
 
   scene.add(g);
@@ -341,13 +827,26 @@ function createCell(id){
 
 for(const id of allIds) createCell(id);
 
+/*
+  applyStateVisual(state)
+
+  Rebuilds the scene from logical state:
+      - positions every visible cell around state.field
+      - applies persistent quaternion orientation
+      - hides the external cell
+      - applies active/idle edge brightness
+      - rebuilds field path and wall projections
+
+  Important: this function should be deterministic from state. Avoid adding
+  hidden side effects here unless they are purely visual.
+*/
 function applyStateVisual(s){
   clearGroup(edgeGroup);
 
   for(const id of allIds){
     const g = cells.get(id);
     g.position.copy(currentPositionFor(id,s));
-    g.quaternion.set(0,0,0,1);
+    g.quaternion.copy(objToQuat(s.orientations?.[id] || {x:0,y:0,z:0,w:1}));
 
     const body = g.getObjectByName("body");
     const ed = g.getObjectByName("edges");
@@ -357,13 +856,15 @@ function applyStateVisual(s){
 
     g.visible = !isExternal;
 
-    body.material.opacity = 0.0;
-    ed.material.color.set(0xaebdca);
-    ed.material.opacity = .75;
+    setCubeOpacity(g, 1.0);
+    g.userData.baseEdgeOpacity = isActive ? 1.00 : 0.65;
+    g.userData.baseEdgeColor = isActive ? 0xffffff : 0xaebdca;
+    ed.material.color.set(g.userData.baseEdgeColor);
+    ed.material.opacity = g.userData.baseEdgeOpacity;
 
     const labelSprite = g.getObjectByName("label");
-    labelSprite.visible = !isExternal;
-    labelSprite.material.opacity = isExternal ? 0.0 : 1.0;
+    labelSprite.visible = false;
+    labelSprite.material.opacity = 0.0;
 
     let label = "";
     if(isActive) label = "активный";
@@ -407,6 +908,21 @@ function rotateAround(object, pivot, axis, angle){
   object.quaternion.premultiply(q);
 }
 
+/*
+  makeNextState(state, axisIndex, sign)
+
+  Computes the next logical state for a move, but does not animate.
+
+  Local axis update rule:
+    If moving in the + direction:
+        new axis pair becomes { plus: opposite(A), minus: A }
+    If moving in the - direction:
+        new axis pair becomes { plus: A, minus: opposite(A) }
+
+  This captures:
+      old active A becomes neighbor of B on the reverse side;
+      old external opposite(A) becomes neighbor on the other side.
+*/
 function makeNextState(s, axisIndex, sign){
   const A = s.active;
   const B = sign > 0 ? s.axes[axisIndex].plus : s.axes[axisIndex].minus;
@@ -419,7 +935,9 @@ function makeNextState(s, axisIndex, sign){
     axes: cloneAxes(s.axes),
     field: vecToObj(field),
     path: [...s.path, B],
-    fieldPath: [...s.fieldPath.map(p => ({...p})), vecToObj(field)]
+    fieldPath: [...s.fieldPath.map(p => ({...p})), vecToObj(field)],
+    orientations: cloneOrientations(s.orientations),
+    pendingNormals: clonePendingNormals(s.pendingNormals)
   };
 
   if(sign > 0){
@@ -431,6 +949,14 @@ function makeNextState(s, axisIndex, sign){
   return next;
 }
 
+/*
+  commonSpinners(state, axisIndex)
+
+  Returns the four visible cells that rotate during the move.
+
+  If the move is along one local axis, the spinners are the cells on the other
+  two local axes. These are exactly the common neighbors of A and B.
+*/
 function commonSpinners(s, axisIndex){
   const arr = [];
   for(let i=0;i<3;i++){
@@ -440,6 +966,24 @@ function commonSpinners(s, axisIndex){
   return arr;
 }
 
+/*
+  runMove(axisIndex, sign)
+
+  Main transition/animation function.
+
+  It derives:
+      A     old active cell
+      B     new active cell
+      enter old external cell, opposite(A)
+      out   new external cell, opposite(B)
+
+  It then:
+      - animates the four common-neighbor cells around their edge pivots;
+      - fades enter/out cells;
+      - transfers active edge brightness from A to B;
+      - records pendingNormals[out];
+      - calls recenterPhase() to commit the logical state.
+*/
 function runMove(axisIndex, sign){
   if(busy) return;
 
@@ -464,6 +1008,10 @@ function runMove(axisIndex, sign){
 
   setLabel(A, "старый активный");
   setLabel(B, "новый активный");
+  cells.get(A).userData.baseEdgeOpacity = 1.00;
+  cells.get(A).userData.baseEdgeColor = 0xffffff;
+  cells.get(B).userData.baseEdgeOpacity = 0.65;
+  cells.get(B).userData.baseEdgeColor = 0xaebdca;
 
   // Анимация смены внешнего кубика:
   // enter (бывший внешний) заранее ставим на его конечное место и плавно проявляем,
@@ -473,9 +1021,16 @@ function runMove(axisIndex, sign){
   const enterLabel = enterGroup.getObjectByName("label");
   enterGroup.visible = true;
   enterGroup.position.copy(currentPositionFor(enter, next));
-  enterGroup.quaternion.set(0,0,0,1);
+  enterGroup.quaternion.copy(objToQuat(state.orientations?.[enter] || {x:0,y:0,z:0,w:1}));
+  // Вместо двух зеркальных отражений применяем один собственный поворот:
+  // первое отражение было бы при уходе во внешний статус,
+  // второе — при возвращении через присоединяемую грань.
+  const enterRotation = rotationFromTwoReflections(state.pendingNormals?.[enter], bDir);
+  enterGroup.quaternion.premultiply(enterRotation);
+  next.pendingNormals[enter] = null;
   enterEdges.material.opacity = 0.0;
-  enterLabel.visible = true;
+  setCubeOpacity(enterGroup, 0.0);
+  enterLabel.visible = false;
   enterLabel.material.opacity = 0.0;
   setLabel(enter, "входит");
 
@@ -483,8 +1038,8 @@ function runMove(axisIndex, sign){
   const outEdges = outGroup.getObjectByName("edges");
   const outLabel = outGroup.getObjectByName("label");
   const outStartOpacity = outEdges.material.opacity;
-  outLabel.visible = true;
-  outLabel.material.opacity = 1.0;
+  outLabel.visible = false;
+  outLabel.material.opacity = 0.0;
   setLabel(out, "выходит");
 
   const per = {};
@@ -504,7 +1059,7 @@ function runMove(axisIndex, sign){
     addAxisLine(edgeName, pivot, axis);
 
     setLabel(S, edgeName);
-    cells.get(S).getObjectByName("body").material.opacity = 0.0;
+    setCubeOpacity(cells.get(S), 1.0);
   }
 
   updateInfo({
@@ -528,18 +1083,36 @@ function runMove(axisIndex, sign){
       }
     }
 
-    // Одновременно со вращением меняем яркость entering/outgoing кубиков.
+    // Одновременно со вращением меняем яркость entering/outgoing кубиков
+    // и плавно передаём яркость активного кубика от A к B.
     const sample = per[spinners[0]];
     const fade = sample ? Math.min(1, sample.done / sample.angle) : 1;
     enterEdges.material.opacity = 0.75 * fade;
-    enterLabel.material.opacity = fade;
+    setCubeOpacity(enterGroup, fade);
+    enterLabel.material.opacity = 0.0;
     outEdges.material.opacity = outStartOpacity * (1 - fade);
-    outLabel.material.opacity = (1 - fade);
+    setCubeOpacity(outGroup, 1 - fade);
+    outLabel.material.opacity = 0.0;
+
+    const oldColor = new THREE.Color(0xffffff);
+    const idleColor = new THREE.Color(0xaebdca);
+    const aColor = oldColor.clone().lerp(idleColor, fade);
+    const bColor = idleColor.clone().lerp(oldColor, fade);
+    cells.get(A).userData.baseEdgeOpacity = 1.00 - 0.35 * fade;
+    cells.get(B).userData.baseEdgeOpacity = 0.65 + 0.35 * fade;
+    cells.get(A).userData.baseEdgeColor = aColor.getHex();
+    cells.get(B).userData.baseEdgeColor = bColor.getHex();
+    applyLocalFog();
 
     if(!finished){
       requestAnimationFrame(rotatePhase);
       return;
     }
+
+    // Уходящий во внешний статус кубик получает pending normal.
+    // Самого зеркального отражения не делаем: оно будет объединено
+    // с отражением при возвращении в один поворот.
+    next.pendingNormals[out] = vecToObj(bDir.clone());
 
     recenterPhase(next, {A,B,enter,out,spinners});
   }
@@ -547,9 +1120,27 @@ function runMove(axisIndex, sign){
   rotatePhase();
 }
 
+/*
+  recenterPhase(next, moveInfo)
+
+  Commits the completed move.
+
+  Despite the name, the current version does not run a second smooth recenter
+  animation. After the visible rolling completes, it immediately:
+      - snapshots all current cube quaternions into next.orientations;
+      - applies next as the new logical state;
+      - redraws everything deterministically from state.
+
+  Do not reset orientations here unless you intentionally discard persistent
+  cube orientation.
+*/
 function recenterPhase(next, moveInfo){
-  // Переход к новой конфигурации делаем сразу, без дополнительной фазы плавного
-  // перемещения скрытого внешнего кубика.
+  // Сохраняем текущие ориентации всех кубиков после завершения поворота.
+  next.orientations = {};
+  for(const id of allIds){
+    next.orientations[id] = quatToObj(cells.get(id).quaternion.clone());
+  }
+
   state = next;
   applyStateVisual(state);
   busy = false;
@@ -575,40 +1166,20 @@ function reset(){
   applyStateVisual(state);
 }
 
+/*
+  rebuildField()
+
+  Draws the outer boundary of the 3D field. The internal grid was removed
+  because it visually interfered on smartphones.
+*/
 function rebuildField(){
   clearGroup(fieldGroup);
-
-  const half = (fieldSize - 1) / 2;
-  const pts = [];
-
-  for(let y=-half; y<=half; y++){
-    for(let z=-half; z<=half; z++){
-      pts.push(new THREE.Vector3(-half,y,z), new THREE.Vector3(half,y,z));
-    }
-  }
-  for(let x=-half; x<=half; x++){
-    for(let z=-half; z<=half; z++){
-      pts.push(new THREE.Vector3(x,-half,z), new THREE.Vector3(x,half,z));
-    }
-  }
-  for(let x=-half; x<=half; x++){
-    for(let y=-half; y<=half; y++){
-      pts.push(new THREE.Vector3(x,y,-half), new THREE.Vector3(x,y,half));
-    }
-  }
-
-  const geom = new THREE.BufferGeometry().setFromPoints(pts);
-  const lines = new THREE.LineSegments(
-    geom,
-    new THREE.LineBasicMaterial({color:0x4d6b86, transparent:true, opacity:.22})
-  );
-  fieldGroup.add(lines);
 
   const box = new THREE.BoxGeometry(fieldSize, fieldSize, fieldSize);
   const edges = new THREE.EdgesGeometry(box);
   const border = new THREE.LineSegments(
     edges,
-    new THREE.LineBasicMaterial({color:0x7ac8ff, transparent:true, opacity:.65})
+    new THREE.LineBasicMaterial({color:0x7ac8ff, transparent:true, opacity:.52})
   );
   fieldGroup.add(border);
 
@@ -617,6 +1188,12 @@ function rebuildField(){
   applyLocalFog();
 }
 
+/*
+  rebuildTrail()
+
+  Draws the path of the active cube through the 3D field. It is controlled by
+  the "Путь" checkbox. Keep this separate from cell orientation logic.
+*/
 function rebuildTrail(){
   clearGroup(trailGroup);
   trailGroup.visible = trailVisible;
@@ -662,6 +1239,12 @@ function applyFieldSize(){
   reset();
 }
 
+/*
+  updateInfo()
+
+  Compact status panel. It intentionally avoids long explanations so the mobile
+  UI remains usable.
+*/
 function updateInfo(move=null){
   const el = document.getElementById("info");
   const p = state.field;
@@ -673,6 +1256,17 @@ function updateInfo(move=null){
     state.path.join(" → ")
   ].join("\n");
 }
+
+/*
+  UI events and keyboard controls.
+  Keyboard:
+      ArrowLeft / ArrowRight = local X
+      PageUp / PageDown     = local Y
+      ArrowUp / ArrowDown   = local Z
+*/
+document.getElementById("uiToggle").addEventListener("click", ()=>{
+  document.body.classList.toggle("ui-hidden");
+});
 
 document.querySelectorAll("button[data-axis]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
@@ -687,11 +1281,6 @@ document.getElementById("applyFieldBtn").addEventListener("click", applyFieldSiz
 document.getElementById("trailCheckbox").addEventListener("change", e=>{
   trailVisible = e.target.checked;
   rebuildTrail();
-});
-
-document.getElementById("fogStrengthInput").addEventListener("input", e=>{
-  fogStrength = parseInt(e.target.value, 10) / 100;
-  applyLocalFog();
 });
 
 document.getElementById("toggleFieldBtn").addEventListener("click", ()=>{
@@ -714,13 +1303,18 @@ window.addEventListener("keydown", e=>{
 
 window.addEventListener("resize", ()=>{
   camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
+  setCameraForViewport();
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 800 ? 1.35 : 2));
   renderer.setSize(innerWidth, innerHeight);
 });
 
+/*
+  Main render loop.
+*/
 function loop(){
   requestAnimationFrame(loop);
   controls.update();
+  applyLocalFog();
   renderer.render(scene,camera);
 }
 
