@@ -388,6 +388,7 @@ let busy = false;
 let edgesVisible = false;
 let trailVisible = false;
 let fieldVisible = true;
+let projectionFaceSignature = "";
 
 const scene = new THREE.Scene();
 const sceneFrame = document.getElementById("sceneFrame");
@@ -691,52 +692,128 @@ function applyLocalFog(){
 /*
   rebuildProjections()
 
-  Draws red circular projections of the active cube center onto all six walls
-  of the 3D field. These markers are intentionally flat wall circles and help
-  understand the active coordinate inside the volume.
+  Draws red surface projections of the active cube center on back field faces.
+  The selected far faces update as OrbitControls moves the camera.
 */
+function projectionBackSigns(){
+  const dir = camera.position.clone().sub(controls.target);
+  return {
+    x: dir.x >= 0 ? -1 : 1,
+    y: dir.y >= 0 ? -1 : 1,
+    z: dir.z >= 0 ? -1 : 1
+  };
+}
+
+function currentProjectionFaceSignature(){
+  const signs = projectionBackSigns();
+  return [signs.x, signs.y, signs.z].join(":");
+}
+
 function rebuildProjections(){
   clearGroup(projectionGroup);
+  projectionFaceSignature = currentProjectionFaceSignature();
   if(!state || !fieldVisible) return;
 
   const half = (fieldSize - 1) / 2;
   const p = fieldVec(state);
-  const r = 0.12;
-  const geo = new THREE.CircleGeometry(r, 24);
+  const backSigns = projectionBackSigns();
+  const dotGeo = new THREE.CircleGeometry(0.12, 24);
+  const markGeo = new THREE.CircleGeometry(0.055, 16);
+  const lineMat = new THREE.LineBasicMaterial({color:0xff3b30, transparent:true, opacity:.72});
+  const dotMat = new THREE.MeshBasicMaterial({color:0xff3b30, side:THREE.DoubleSide});
+  const markMat = new THREE.MeshBasicMaterial({color:0xff3b30, side:THREE.DoubleSide});
+  const zNormal = new THREE.Vector3(0,0,1);
+  const surfaceOffset = 0.003;
 
-  const specs = [
-    {pos:[-half, p.y, p.z], rot:[0, Math.PI/2, 0]},
-    {pos:[ half, p.y, p.z], rot:[0,-Math.PI/2, 0]},
-    {pos:[ p.x,-half, p.z], rot:[ Math.PI/2, 0, 0]},
-    {pos:[ p.x, half, p.z], rot:[-Math.PI/2, 0, 0]},
-    {pos:[ p.x, p.y,-half], rot:[0,0,0]},
-    {pos:[ p.x, p.y, half], rot:[0,Math.PI,0]}
-  ];
+  function orientOnFace(mesh, normal){
+    const n = normal.clone().normalize();
+    mesh.quaternion.setFromUnitVectors(zNormal, n);
+    mesh.position.add(n.multiplyScalar(surfaceOffset));
+  }
 
-  const projectionLineMaterial = new THREE.LineBasicMaterial({
-    color:0xff3b30,
-    transparent:true,
-    opacity:.72
-  });
-  const projectionLines = [
-    [new THREE.Vector3(-half, p.y, p.z), new THREE.Vector3( half, p.y, p.z)],
-    [new THREE.Vector3( p.x,-half, p.z), new THREE.Vector3( p.x, half, p.z)],
-    [new THREE.Vector3( p.x, p.y,-half), new THREE.Vector3( p.x, p.y, half)]
-  ];
+  function faceNormalForSegment(a, b){
+    const eps = 1e-6;
+    if(Math.abs(a.x - b.x) < eps && Math.abs(Math.abs(a.x) - half) < eps) return new THREE.Vector3(Math.sign(a.x),0,0);
+    if(Math.abs(a.y - b.y) < eps && Math.abs(Math.abs(a.y) - half) < eps) return new THREE.Vector3(0,Math.sign(a.y),0);
+    if(Math.abs(a.z - b.z) < eps && Math.abs(Math.abs(a.z) - half) < eps) return new THREE.Vector3(0,0,Math.sign(a.z));
+    return null;
+  }
 
-  for(const points of projectionLines){
+  function isVisibleFace(normal){
+    if(!normal) return false;
+    if(Math.abs(normal.x) > 0.5) return Math.sign(normal.x) === backSigns.x;
+    if(Math.abs(normal.y) > 0.5) return Math.sign(normal.y) === backSigns.y;
+    if(Math.abs(normal.z) > 0.5) return Math.sign(normal.z) === backSigns.z;
+    return false;
+  }
+
+  function addSurfaceSegment(a, b, normal){
+    const offset = normal.clone().normalize().multiplyScalar(surfaceOffset);
     const line = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(points),
-      projectionLineMaterial.clone()
+      new THREE.BufferGeometry().setFromPoints([a.clone().add(offset), b.clone().add(offset)]),
+      lineMat.clone()
     );
     projectionGroup.add(line);
   }
 
+  function addSurfaceLoop(points){
+    const closed = [...points, points[0]];
+    for(let i=0; i<closed.length-1; i++){
+      const a = closed[i];
+      const b = closed[i+1];
+      const segment = b.clone().sub(a);
+      const len = segment.length();
+      if(len < 1e-6) continue;
+      const normal = faceNormalForSegment(a, b);
+      if(!isVisibleFace(normal)) continue;
+      addSurfaceSegment(a, b, normal);
+
+      const dir = segment.clone().normalize();
+      for(let d=spacing; d<len-1e-6; d+=spacing){
+        const mark = new THREE.Mesh(markGeo, markMat.clone());
+        mark.position.copy(a).add(dir.clone().multiplyScalar(d));
+        orientOnFace(mark, normal);
+        projectionGroup.add(mark);
+      }
+    }
+  }
+
+  const surfaceLoops = [
+    [
+      new THREE.Vector3(p.x,-half,-half),
+      new THREE.Vector3(p.x, half,-half),
+      new THREE.Vector3(p.x, half, half),
+      new THREE.Vector3(p.x,-half, half)
+    ],
+    [
+      new THREE.Vector3(-half,p.y,-half),
+      new THREE.Vector3( half,p.y,-half),
+      new THREE.Vector3( half,p.y, half),
+      new THREE.Vector3(-half,p.y, half)
+    ],
+    [
+      new THREE.Vector3(-half,-half,p.z),
+      new THREE.Vector3( half,-half,p.z),
+      new THREE.Vector3( half, half,p.z),
+      new THREE.Vector3(-half, half,p.z)
+    ]
+  ];
+  for(const loop of surfaceLoops) addSurfaceLoop(loop);
+
+  const specs = [
+    {pos:[-half, p.y, p.z], normal:new THREE.Vector3(-1,0,0)},
+    {pos:[ half, p.y, p.z], normal:new THREE.Vector3( 1,0,0)},
+    {pos:[ p.x,-half, p.z], normal:new THREE.Vector3(0,-1,0)},
+    {pos:[ p.x, half, p.z], normal:new THREE.Vector3(0, 1,0)},
+    {pos:[ p.x, p.y,-half], normal:new THREE.Vector3(0,0,-1)},
+    {pos:[ p.x, p.y, half], normal:new THREE.Vector3(0,0, 1)}
+  ];
+
   for(const spec of specs){
-    const mat = new THREE.MeshBasicMaterial({color:0xff3b30, side:THREE.DoubleSide});
-    const m = new THREE.Mesh(geo, mat);
+    if(!isVisibleFace(spec.normal)) continue;
+    const m = new THREE.Mesh(dotGeo, dotMat.clone());
     m.position.set(...spec.pos);
-    m.rotation.set(...spec.rot);
+    orientOnFace(m, spec.normal);
     projectionGroup.add(m);
   }
 
@@ -1409,6 +1486,9 @@ window.addEventListener("orientationchange", layoutScene);
 function loop(){
   requestAnimationFrame(loop);
   controls.update();
+  if(fieldVisible && currentProjectionFaceSignature() !== projectionFaceSignature){
+    rebuildProjections();
+  }
   applyLocalFog();
   renderer.render(scene,camera);
 }

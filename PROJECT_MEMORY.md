@@ -26,7 +26,7 @@ CubeRoller is a set of single-file Three.js demos: a 3D numbered cube roller and
 - `cube4d2.html` avoids negative scale for external cells by combining two conceptual reflections into one rotation in `rotationFromTwoReflections()`.
 - `cube4d2.html` has a responsive rebuilt control panel with static movement labels, path display disabled by default, and default field size 7.
 - `cube4d2.html` renders Three.js inside `#sceneFrame`, keeping controls outside the canvas, using a bottom panel in portrait and a right-side vertical panel in landscape, fitting the camera to the full field after resize/orientation/UI/field-size changes, and constraining OrbitControls pan/zoom so the field is not accidentally lost.
-- `cube4d2.html` field projections draw red wall-surface dots connected across opposite field faces.
+- `cube4d2.html` field projections draw red wall-surface dots plus red surface cross-section segments with unit-spaced red markers only on dynamically selected far/back field faces.
 
 ## Project Structure
 - `cube3d.html`: Entire app (HTML, CSS, JS). Includes Three.js via CDN.
