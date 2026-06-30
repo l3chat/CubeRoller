@@ -214,7 +214,7 @@ label{display:flex;align-items:center;justify-content:space-between;gap:8px;min-
 input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
 input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,.28);border-radius:8px;background:#101827;color:var(--text);font-size:16px;font-weight:800;text-align:center}
 #info{font-size:12px;line-height:1.35;color:#cfe4ff;white-space:pre-line;padding:8px;border-radius:8px;background:rgba(8,12,20,.45);border:1px solid rgba(151,190,235,.12)}
-@media(max-width:800px), (orientation:portrait){
+@media(orientation:portrait){
   body{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
   #uiToggle{left:calc(8px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top));min-width:52px;min-height:42px;padding:0 12px;border-radius:11px;font-size:12px;opacity:.9;box-shadow:0 8px 20px rgba(0,0,0,.28)}
   #panel{max-height:min(44dvh,360px);overflow:auto;padding:9px max(9px,env(safe-area-inset-right)) max(9px,env(safe-area-inset-bottom)) max(9px,env(safe-area-inset-left));border-left:0;border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.25);gap:7px;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);align-items:stretch;align-content:stretch}
@@ -226,7 +226,7 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   input[type=number]{width:100%;min-height:38px}
   #info{grid-column:1 / -1;font-size:10px;line-height:1.18;max-height:50px;overflow:hidden;padding:7px;opacity:.82}
 }
-@media(max-width:480px){
+@media(orientation:portrait) and (max-width:480px){
   #panel{max-height:min(42dvh,330px);grid-template-columns:1fr 1fr;gap:6px;padding:7px max(7px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(7px,env(safe-area-inset-left))}
   .move-pad{grid-template-rows:repeat(3,38px)}
   button{min-height:38px;font-size:11px;padding:0 4px}
@@ -234,10 +234,17 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   input[type=number]{min-height:34px;font-size:15px}
   #info{display:none}
 }
-@media(max-width:360px){
+@media(orientation:portrait) and (max-width:360px){
   #panel{max-height:40dvh}
   .move-pad{grid-template-rows:repeat(3,34px)}
   button{min-height:34px;font-size:10px}
+}
+@media(orientation:landscape){
+  body{grid-template-columns:minmax(0,1fr) clamp(220px,24vw,330px);grid-template-rows:minmax(0,1fr)}
+  body.ui-hidden{grid-template-columns:minmax(0,1fr) 0;grid-template-rows:minmax(0,1fr)}
+  #panel{max-height:100dvh;border-top:0;border-left:1px solid var(--line);box-shadow:-4px 0 16px rgba(0,0,0,.25);grid-template-columns:1fr;align-content:center}
+  .actions,.settings,.field-control{grid-template-columns:1fr}
+  input[type=number]{width:100%}
 }
 @media(orientation:landscape) and (max-height:520px){
   body{grid-template-columns:minmax(0,1fr) clamp(168px,24vw,280px);grid-template-rows:minmax(0,1fr)}
@@ -392,6 +399,7 @@ sceneFrame.appendChild(renderer.domElement);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = .08;
+controls.enablePan = false;
 
 scene.add(new THREE.AmbientLight(0xffffff, .72));
 const light = new THREE.DirectionalLight(0xffffff, .92);
@@ -425,8 +433,9 @@ function resizeRendererToFrame(){
 function setCameraForViewport(){
   const {width, height} = renderSize();
   const compact = width < 760 || height < 520;
-  const halfField = fieldSize / 2;
-  const fieldRadius = Math.sqrt(3 * halfField * halfField) + 1.85;
+  const halfField = (fieldSize - 1) / 2;
+  const maxVisibleExtent = halfField + spacing + h;
+  const fieldRadius = Math.sqrt(3 * maxVisibleExtent * maxVisibleExtent) + 0.75;
   const verticalFov = THREE.MathUtils.degToRad(compact ? 56 : 48);
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const fitFov = Math.max(0.01, Math.min(verticalFov, horizontalFov));
@@ -436,8 +445,10 @@ function setCameraForViewport(){
   camera.fov = THREE.MathUtils.radToDeg(verticalFov);
   controls.target.set(0, 0, 0);
   camera.position.copy(direction.multiplyScalar(distance));
-  camera.near = Math.max(0.05, distance - fieldRadius * 2.2);
-  camera.far = distance + fieldRadius * 2.8;
+  camera.near = 0.05;
+  camera.far = distance + fieldRadius * 3.5;
+  controls.minDistance = fieldRadius * 1.35;
+  controls.maxDistance = distance * 1.45;
   camera.updateProjectionMatrix();
   camera.lookAt(controls.target);
 }
@@ -834,6 +845,7 @@ function makeMarkerTexture(symbol){
 }
 
 function setCubeOpacity(group, opacity){
+  opacity = Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1;
   const body = group.getObjectByName("body");
   if(!body) return;
   const mats = Array.isArray(body.material) ? body.material : [body.material];
@@ -1168,7 +1180,7 @@ function runMove(axisIndex, sign){
     // Одновременно со вращением меняем яркость entering/outgoing кубиков
     // и плавно передаём яркость активного кубика от A к B.
     const sample = per[spinners[0]];
-    const fade = sample ? Math.min(1, sample.done / sample.angle) : 1;
+    const fade = sample && sample.angle > 1e-9 ? Math.min(1, sample.done / sample.angle) : 1;
     enterEdges.material.opacity = 0.75 * fade;
     setCubeOpacity(enterGroup, fade);
     enterLabel.material.opacity = 0.0;
