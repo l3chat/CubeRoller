@@ -22,7 +22,7 @@ around one "active" cubic cell:
 
     active cell:          center of the visible local unfolding
     six neighbor cells:   one in each local ±X, ±Y, ±Z direction
-    one external cell:    the cell opposite the active cell, not currently drawn
+    one external cell:    the cell opposite the active cell, drawn at its stored outside position
 
 The visual object can move through a 3D field. The active cell has a field
 coordinate (x, y, z). The visible local unfolding is placed around that field
@@ -99,6 +99,10 @@ Relevant function:
 
 Persistent cube orientation
 ---------------------------
+The external cube remains visible after it leaves the unfolding. Its outside
+position is stored in state.externalPositions[id] until it returns; on return it
+moves along a high clearance arc while slerping to the required orientation.
+
 Every cube stores its current orientation in:
 
     state.orientations[id] = {x, y, z, w}
@@ -366,7 +370,7 @@ const allIds = [0,1,2,3,4,5,6,7];
   This must remain an involution:
       opposite[opposite[id]] === id
 
-  It defines which cell is hidden/external for a given active cell.
+  It defines which cell is external for a given active cell.
 */
 const opposite = {0:7,7:0,1:6,6:1,2:5,5:2,3:4,4:3};
 
@@ -535,6 +539,21 @@ function clonePendingNormals(pending){
   return out;
 }
 
+function identityExternalPositions(){
+  const map = {};
+  for(const id of allIds) map[id] = null;
+  return map;
+}
+
+function cloneExternalPositions(positions){
+  const out = {};
+  for(const id of allIds){
+    const p = positions?.[id] || null;
+    out[id] = p ? {x:p.x, y:p.y, z:p.z} : null;
+  }
+  return out;
+}
+
 function reflectionLinearMatrix(normal){
   const n = normal.clone().normalize();
   const nx = n.x, ny = n.y, nz = n.z;
@@ -595,7 +614,8 @@ function cloneState(s){
     path: [...s.path],
     fieldPath: s.fieldPath.map(p => ({...p})),
     orientations: cloneOrientations(s.orientations),
-    pendingNormals: clonePendingNormals(s.pendingNormals)
+    pendingNormals: clonePendingNormals(s.pendingNormals),
+    externalPositions: cloneExternalPositions(s.externalPositions)
   };
 }
 
@@ -625,15 +645,16 @@ function initialState(){
     path: [0],
     fieldPath: [{x:0,y:0,z:0}],
     orientations: identityOrientations(),
-    pendingNormals: identityPendingNormals()
+    pendingNormals: identityPendingNormals(),
+    externalPositions: identityExternalPositions()
   };
 }
 
 /*
   externalCell(state)
 
-  The one cell not drawn in the current local unfolding.
-  It is always opposite(active).
+  The one cell outside the current local unfolding.
+  It is always opposite(active), and remains visible at its stored outside position.
 */
 function externalCell(s){
   return opposite[s.active];
@@ -820,18 +841,27 @@ function rebuildProjections(){
   applyLocalFog();
 }
 
+function externalFallbackPositionFor(s){
+  return fieldVec(s).add(new THREE.Vector3(2.35, 1.45, 0));
+}
+
+function externalStoredPositionFor(id, s){
+  const stored = s.externalPositions?.[id] || null;
+  return stored ? objToVec(stored) : externalFallbackPositionFor(s);
+}
+
 function currentPositionFor(id, s){
   const base = fieldVec(s);
 
   if(id === s.active) return base;
-  if(id === externalCell(s)) return base.clone().add(new THREE.Vector3(2.35, 1.45, 0));
+  if(id === externalCell(s)) return externalStoredPositionFor(id, s);
 
   for(let i=0;i<3;i++){
     if(s.axes[i].plus === id) return base.clone().add(dirVectors[i].clone().multiplyScalar(spacing));
     if(s.axes[i].minus === id) return base.clone().add(dirVectors[i].clone().multiplyScalar(-spacing));
   }
 
-  return base.clone().add(new THREE.Vector3(2.35, -1.45, 0));
+  return externalStoredPositionFor(id, s);
 }
 
 function localDirFor(id, s){
@@ -1005,7 +1035,7 @@ for(const id of allIds) createCell(id);
   Rebuilds the scene from logical state:
       - positions every visible cell around state.field
       - applies persistent quaternion orientation
-      - hides the external cell
+      - keeps the external cell visible at its stored outside position
       - applies active/idle edge brightness
       - rebuilds field path and wall projections
 
@@ -1026,11 +1056,11 @@ function applyStateVisual(s){
     const isActive = id === s.active;
     const isExternal = id === externalCell(s);
 
-    g.visible = !isExternal;
+    g.visible = true;
 
     setCubeOpacity(g, 1.0);
-    g.userData.baseEdgeOpacity = isActive ? 1.00 : 0.65;
-    g.userData.baseEdgeColor = isActive ? 0xffffff : 0xaebdca;
+    g.userData.baseEdgeOpacity = isActive ? 1.00 : isExternal ? 0.50 : 0.65;
+    g.userData.baseEdgeColor = isActive ? 0xffffff : isExternal ? 0x7aa9d8 : 0xaebdca;
     ed.material.color.set(g.userData.baseEdgeColor);
     ed.material.opacity = g.userData.baseEdgeOpacity;
 
@@ -1040,7 +1070,7 @@ function applyStateVisual(s){
 
     let label = "";
     if(isActive) label = "активный";
-    else if(isExternal) label = "";
+    else if(isExternal) label = "внешний";
     else label = "сосед " + s.active;
     setLabel(id,label);
   }
@@ -1079,6 +1109,30 @@ function rotateAround(object, pivot, axis, angle){
   object.quaternion.premultiply(q);
 }
 
+function arcPoint(start, target, center, lift, t){
+  const mid = start.clone().lerp(target, 0.5);
+  const chord = target.clone().sub(start);
+  let clearance = mid.clone().sub(center);
+
+  // Keep the control point off the start-target chord so the arc never collapses into a straight line.
+  if(chord.lengthSq() > 1e-8){
+    const chordDir = chord.clone().normalize();
+    clearance.addScaledVector(chordDir, -clearance.dot(chordDir));
+    if(clearance.lengthSq() < 1e-8){
+      clearance = new THREE.Vector3().crossVectors(chordDir, new THREE.Vector3(0,1,0));
+      if(clearance.lengthSq() < 1e-8){
+        clearance = new THREE.Vector3().crossVectors(chordDir, new THREE.Vector3(1,0,0));
+      }
+    }
+  }
+
+  if(clearance.lengthSq() < 1e-8) clearance = new THREE.Vector3(0,1,0);
+  const control = mid.add(clearance.normalize().multiplyScalar(lift));
+  const a = start.clone().lerp(control, t);
+  const b = control.clone().lerp(target, t);
+  return a.lerp(b, t);
+}
+
 /*
   makeNextState(state, axisIndex, sign)
 
@@ -1108,7 +1162,8 @@ function makeNextState(s, axisIndex, sign){
     path: [...s.path, B],
     fieldPath: [...s.fieldPath.map(p => ({...p})), vecToObj(field)],
     orientations: cloneOrientations(s.orientations),
-    pendingNormals: clonePendingNormals(s.pendingNormals)
+    pendingNormals: clonePendingNormals(s.pendingNormals),
+    externalPositions: cloneExternalPositions(s.externalPositions)
   };
 
   if(sign > 0){
@@ -1185,22 +1240,28 @@ function runMove(axisIndex, sign){
   cells.get(B).userData.baseEdgeColor = 0xaebdca;
 
   // Анимация смены внешнего кубика:
-  // enter (бывший внешний) заранее ставим на его конечное место и плавно проявляем,
-  // out (будущий внешний) плавно гасим на текущем месте.
+  // enter (бывший внешний) возвращается по дуге из сохранённой внешней позиции
+  // и одновременно получает нужный поворот; out остаётся видимым на месте выхода.
+  next.externalPositions[enter] = null;
   const enterGroup = cells.get(enter);
   const enterEdges = enterGroup.getObjectByName("edges");
   const enterLabel = enterGroup.getObjectByName("label");
+  const enterStartPosition = currentPositionFor(enter, state);
+  const enterTargetPosition = currentPositionFor(enter, next);
+  const enterStartQuaternion = objToQuat(state.orientations?.[enter] || {x:0,y:0,z:0,w:1});
   enterGroup.visible = true;
-  enterGroup.position.copy(currentPositionFor(enter, next));
-  enterGroup.quaternion.copy(objToQuat(state.orientations?.[enter] || {x:0,y:0,z:0,w:1}));
+  enterGroup.position.copy(enterStartPosition);
+  enterGroup.quaternion.copy(enterStartQuaternion);
   // Вместо двух зеркальных отражений применяем один собственный поворот:
   // первое отражение было бы при уходе во внешний статус,
   // второе — при возвращении через присоединяемую грань.
   const enterRotation = rotationFromTwoReflections(state.pendingNormals?.[enter], bDir);
-  enterGroup.quaternion.premultiply(enterRotation);
+  const enterTargetQuaternion = enterStartQuaternion.clone().premultiply(enterRotation);
+  const enterArcCenter = base.clone();
+  const enterArcLift = spacing * 3.0;
   next.pendingNormals[enter] = null;
-  enterEdges.material.opacity = 0.0;
-  setCubeOpacity(enterGroup, 0.0);
+  enterEdges.material.opacity = 0.75;
+  setCubeOpacity(enterGroup, 1.0);
   enterLabel.visible = false;
   enterLabel.material.opacity = 0.0;
   setLabel(enter, "входит");
@@ -1208,6 +1269,7 @@ function runMove(axisIndex, sign){
   const outGroup = cells.get(out);
   const outEdges = outGroup.getObjectByName("edges");
   const outLabel = outGroup.getObjectByName("label");
+  const outStartPosition = currentPositionFor(out, state);
   const outStartOpacity = outEdges.material.opacity;
   outLabel.visible = false;
   outLabel.material.opacity = 0.0;
@@ -1258,11 +1320,14 @@ function runMove(axisIndex, sign){
     // и плавно передаём яркость активного кубика от A к B.
     const sample = per[spinners[0]];
     const fade = sample && sample.angle > 1e-9 ? Math.min(1, sample.done / sample.angle) : 1;
-    enterEdges.material.opacity = 0.75 * fade;
-    setCubeOpacity(enterGroup, fade);
+    enterGroup.position.copy(arcPoint(enterStartPosition, enterTargetPosition, enterArcCenter, enterArcLift, fade));
+    enterGroup.quaternion.slerpQuaternions(enterStartQuaternion, enterTargetQuaternion, fade);
+    outGroup.position.copy(outStartPosition);
+    enterEdges.material.opacity = 0.75;
+    setCubeOpacity(enterGroup, 1.0);
     enterLabel.material.opacity = 0.0;
-    outEdges.material.opacity = outStartOpacity * (1 - fade);
-    setCubeOpacity(outGroup, 1 - fade);
+    outEdges.material.opacity = Math.max(0.50, outStartOpacity);
+    setCubeOpacity(outGroup, 1.0);
     outLabel.material.opacity = 0.0;
 
     const oldColor = new THREE.Color(0xffffff);
@@ -1284,6 +1349,7 @@ function runMove(axisIndex, sign){
     // Самого зеркального отражения не делаем: оно будет объединено
     // с отражением при возвращении в один поворот.
     next.pendingNormals[out] = vecToObj(bDir.clone());
+    next.externalPositions[out] = vecToObj(outStartPosition);
 
     recenterPhase(next, {A,B,enter,out,spinners});
   }
