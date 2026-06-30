@@ -123,6 +123,8 @@ Rendering notes
 - Cube numbers/marks are textures attached to faces, not floating sprites.
 - Red circles on the field walls are projections of the active cube center.
 - The internal coordinate grid was removed; only the field boundary box remains.
+- The Three.js canvas lives in #sceneFrame; controls live outside it so they do
+  not cover the field.
 - Mobile layout includes a compact bottom panel and a UI toggle button.
 
 Codex-agent editing guidelines
@@ -189,10 +191,14 @@ Good places for future work
 */
 :root{--bg0:#0d1117;--bg1:#172033;--panel:rgba(8,12,20,.92);--panel2:rgba(22,31,48,.82);--line:rgba(151,190,235,.24);--text:#eaf3ff;--muted:#abc2dc;--accent:#4da6ff;--gold:#d69e2e;--green:#14815f;--danger:#475569}
 *{box-sizing:border-box}
-body{margin:0;overflow:hidden;background:radial-gradient(circle at 18% 16%,#263a60 0%,transparent 42%),radial-gradient(circle at 84% 78%,#1d304d 0%,transparent 45%),linear-gradient(140deg,var(--bg0),var(--bg1));color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-#panel{position:absolute;top:12px;right:12px;z-index:5;width:min(420px,calc(100vw - 24px));padding:12px;border-radius:12px;background:var(--panel);border:1px solid var(--line);box-shadow:0 12px 32px rgba(0,0,0,.35);display:grid;grid-template-columns:1fr;gap:10px;backdrop-filter:blur(10px)}
-#uiToggle{position:absolute;left:10px;top:10px;z-index:6;width:auto;min-width:46px;min-height:36px;padding:0 12px;border:0;border-radius:9px;background:#334155;color:white;font-weight:800;cursor:pointer}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle at 18% 16%,#263a60 0%,transparent 42%),radial-gradient(circle at 84% 78%,#1d304d 0%,transparent 45%),linear-gradient(140deg,var(--bg0),var(--bg1));color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overscroll-behavior:none}
+body{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minmax(0,1fr) clamp(220px,24vw,330px);grid-template-rows:minmax(0,1fr);touch-action:none}
+#sceneFrame{position:relative;min-width:0;min-height:0;overflow:hidden}
+#sceneFrame canvas{width:100%;height:100%;display:block;touch-action:none}
+#panel{z-index:5;min-width:0;min-height:0;max-height:100dvh;overflow:auto;padding:12px max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) 12px;background:var(--panel);border-left:1px solid var(--line);box-shadow:-4px 0 16px rgba(0,0,0,.25);display:grid;grid-template-columns:1fr;align-content:center;gap:10px;backdrop-filter:blur(10px)}
+#uiToggle{position:absolute;left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));z-index:6;width:auto;min-width:46px;min-height:36px;padding:0 12px;border:0;border-radius:9px;background:#334155;color:white;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.28)}
 body.ui-hidden #panel{display:none}
+body.ui-hidden{grid-template-columns:minmax(0,1fr) 0}
 .control-section{display:grid;gap:6px}
 .move-pad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"up up up" "left forward right" "down back back";gap:6px}
 #btnUp{grid-area:up}#btnLeft{grid-area:left}#btnForward{grid-area:forward}#btnRight{grid-area:right}#btnDown{grid-area:down}#btnBack{grid-area:back}
@@ -208,10 +214,11 @@ label{display:flex;align-items:center;justify-content:space-between;gap:8px;min-
 input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
 input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,.28);border-radius:8px;background:#101827;color:var(--text);font-size:16px;font-weight:800;text-align:center}
 #info{font-size:12px;line-height:1.35;color:#cfe4ff;white-space:pre-line;padding:8px;border-radius:8px;background:rgba(8,12,20,.45);border:1px solid rgba(151,190,235,.12)}
-@media(max-width:800px){
-  body{touch-action:none}
+@media(max-width:800px), (orientation:portrait){
+  body{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
   #uiToggle{left:calc(8px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top));min-width:52px;min-height:42px;padding:0 12px;border-radius:11px;font-size:12px;opacity:.9;box-shadow:0 8px 20px rgba(0,0,0,.28)}
-  #panel{left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));top:auto;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:min(50svh,380px);overflow:auto;padding:9px;border-radius:14px;gap:7px;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);align-items:stretch}
+  #panel{max-height:min(44dvh,360px);overflow:auto;padding:9px max(9px,env(safe-area-inset-right)) max(9px,env(safe-area-inset-bottom)) max(9px,env(safe-area-inset-left));border-left:0;border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.25);gap:7px;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);align-items:stretch;align-content:stretch}
+  body.ui-hidden{grid-template-rows:minmax(0,1fr) 0}
   .move-pad{grid-row:span 3;grid-template-rows:repeat(3,minmax(42px,1fr));height:100%}
   .actions,.settings,.field-control{grid-template-columns:1fr;gap:6px}
   button{min-height:42px;border-radius:10px;font-size:12px;padding:0 6px}
@@ -220,7 +227,7 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   #info{grid-column:1 / -1;font-size:10px;line-height:1.18;max-height:50px;overflow:hidden;padding:7px;opacity:.82}
 }
 @media(max-width:480px){
-  #panel{max-height:min(48svh,350px);grid-template-columns:1fr 1fr;gap:6px;padding:7px}
+  #panel{max-height:min(42dvh,330px);grid-template-columns:1fr 1fr;gap:6px;padding:7px max(7px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(7px,env(safe-area-inset-left))}
   .move-pad{grid-template-rows:repeat(3,38px)}
   button{min-height:38px;font-size:11px;padding:0 4px}
   label{min-height:34px;font-size:10px}
@@ -228,12 +235,13 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   #info{display:none}
 }
 @media(max-width:360px){
-  #panel{max-height:44svh}
+  #panel{max-height:40dvh}
   .move-pad{grid-template-rows:repeat(3,34px)}
   button{min-height:34px;font-size:10px}
 }
 @media(orientation:landscape) and (max-height:520px){
-  #panel{top:calc(8px + env(safe-area-inset-top));bottom:auto;left:auto;right:calc(8px + env(safe-area-inset-right));width:min(46vw,420px);max-height:calc(100svh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+  body{grid-template-columns:minmax(0,1fr) clamp(168px,24vw,280px);grid-template-rows:minmax(0,1fr)}
+  #panel{max-height:100dvh;padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) 8px;border-top:0;border-left:1px solid var(--line)}
   #info{display:none}
 }
 </style>
@@ -243,8 +251,9 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   UI structure:
   - #uiToggle hides/shows the full control panel on small screens.
   - #panel contains movement buttons, path/field toggles, field size, and compact state readout.
-  - The Three.js canvas is inserted by JavaScript below.
+  - #sceneFrame receives the Three.js canvas inserted by JavaScript below.
 -->
+<div id="sceneFrame" aria-label="Трёхмерное поле"></div>
 <button id="uiToggle" aria-label="Показать или скрыть панель">UI</button>
 <div id="panel">
   <div class="control-section move-pad">
@@ -374,12 +383,11 @@ let trailVisible = false;
 let fieldVisible = true;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, .1, 1000);
+const sceneFrame = document.getElementById("sceneFrame");
+const camera = new THREE.PerspectiveCamera(48, 1, .1, 1000);
 const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 800 ? 1.35 : 2));
 renderer.setClearColor(0x111827, 1);
-document.body.appendChild(renderer.domElement);
+sceneFrame.appendChild(renderer.domElement);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -399,20 +407,47 @@ scene.add(fill);
   Chooses a different starting camera for desktop and smartphone screens.
   This is purely visual and does not affect the model.
 */
+function renderSize(){
+  return {
+    width: Math.max(1, sceneFrame.clientWidth || innerWidth),
+    height: Math.max(1, sceneFrame.clientHeight || innerHeight)
+  };
+}
+
+function resizeRendererToFrame(){
+  const {width, height} = renderSize();
+  camera.aspect = width / height;
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, width < 800 ? 1.35 : 2));
+  renderer.setSize(width, height, false);
+  camera.updateProjectionMatrix();
+}
+
 function setCameraForViewport(){
-  if(innerWidth < 800){
-    camera.position.set(-5.2, 4.25, 7.0);
-    camera.fov = innerWidth < 420 ? 58 : 54;
-    controls.target.set(0,.55,0);
-  } else {
-    camera.position.set(-7.5, 6.5, 9.2);
-    camera.fov = 48;
-    controls.target.set(0,.25,0);
-  }
+  const {width, height} = renderSize();
+  const compact = width < 760 || height < 520;
+  const halfField = fieldSize / 2;
+  const fieldRadius = Math.sqrt(3 * halfField * halfField) + 1.85;
+  const verticalFov = THREE.MathUtils.degToRad(compact ? 56 : 48);
+  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
+  const fitFov = Math.max(0.01, Math.min(verticalFov, horizontalFov));
+  const distance = fieldRadius / Math.sin(fitFov / 2) * 1.08;
+  const direction = new THREE.Vector3(-0.62, 0.52, 0.72).normalize();
+
+  camera.fov = THREE.MathUtils.radToDeg(verticalFov);
+  controls.target.set(0, 0, 0);
+  camera.position.copy(direction.multiplyScalar(distance));
+  camera.near = Math.max(0.05, distance - fieldRadius * 2.2);
+  camera.far = distance + fieldRadius * 2.8;
   camera.updateProjectionMatrix();
   camera.lookAt(controls.target);
 }
-setCameraForViewport();
+
+function layoutScene(){
+  resizeRendererToFrame();
+  setCameraForViewport();
+  resizeRendererToFrame();
+}
+layoutScene();
 
 const cells = new Map();
 const edgeGroup = new THREE.Group();
@@ -1283,6 +1318,7 @@ function applyFieldSize(){
   fieldSize = v;
   document.getElementById("fieldSizeInput").value = String(v);
   rebuildField();
+  layoutScene();
   reset();
 }
 
@@ -1313,6 +1349,7 @@ function updateInfo(move=null){
 */
 document.getElementById("uiToggle").addEventListener("click", ()=>{
   document.body.classList.toggle("ui-hidden");
+  requestAnimationFrame(layoutScene);
 });
 
 document.querySelectorAll("button[data-axis]").forEach(btn=>{
@@ -1348,12 +1385,11 @@ window.addEventListener("keydown", e=>{
   if(e.key === "Backspace") undo();
 });
 
-window.addEventListener("resize", ()=>{
-  camera.aspect = innerWidth / innerHeight;
-  setCameraForViewport();
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth < 800 ? 1.35 : 2));
-  renderer.setSize(innerWidth, innerHeight);
-});
+if("ResizeObserver" in window){
+  new ResizeObserver(layoutScene).observe(sceneFrame);
+}
+window.addEventListener("resize", layoutScene);
+window.addEventListener("orientationchange", layoutScene);
 
 /*
   Main render loop.
