@@ -35,17 +35,17 @@ Cells are numbered 0..7.
     0 is the initial central/active cell.
     7 is the initial external/opposite cell.
 
-Initial local neighbor numbering follows the "game die" style adopted in the
-conversation:
+Initial local neighbor numbering keeps the same opposite pairs, but the visual
+startup orientation places cells 1, 2, and 3 on the camera-facing side:
 
-    +X / right:    3
-    -X / left:     4
+    +X / right:    4
+    -X / left:     3
 
     +Y / up:       1
     -Y / down:     6
 
-    +Z / forward:  2
-    -Z / back:     5
+    +Z / forward:  5
+    -Z / back:     2
 
 Opposite pairs:
 
@@ -604,22 +604,22 @@ function cloneState(s){
 
   Defines the initial local unfolding around cell 0.
 
-  The adopted direction mapping is:
-      right  = 3
-      left   = 4
+  The adopted startup orientation keeps cells 1, 2, and 3 facing the camera:
+      right  = 4
+      left   = 3
       up     = 1
       down   = 6
-      forward= 2
-      back   = 5
+      forward= 5
+      back   = 2
       external opposite = 7
 */
 function initialState(){
   return {
     active: 0,
     axes: [
-      {plus:3, minus:4}, // right / left
-      {plus:1, minus:6}, // up / down
-      {plus:2, minus:5}  // forward / back
+      {plus:4, minus:3}, // right / left; 3 starts on camera-facing -X
+      {plus:1, minus:6}, // up / down; 1 starts on camera-facing +Y
+      {plus:5, minus:2}  // forward / back; 2 starts on camera-facing world +Z
     ],
     field: {x:0, y:0, z:0},
     path: [0],
