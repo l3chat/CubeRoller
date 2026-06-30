@@ -1,287 +1,409 @@
-<!DOCTYPE html>  
-<html lang="ru">  
-<head>  
-    <meta charset="UTF-8">  
-    <title>Кантование куба с ориентацией</title>  
-    <style>  
-        body { margin: 0; overflow: hidden; background: #222; }  
-        #controls {  
-            position: absolute;  
-            top: 10px;  
-            right: 10px;  
-            display: flex;  
-            flex-direction: column;  
-            gap: 8px;  
-            background: rgba(34,34,34,0.8);  
-            padding: 10px;  
-            border-radius: 8px;  
-        }  
-        button {  
-            padding: 8px 16px;  
-            font-size: 16px;  
-            cursor: pointer;  
-            border: none;  
-            background: #3498db;  
-            color: white;  
-            border-radius: 6px;  
-            transition: background 0.3s;  
-        }  
-        button:hover {  
-            background: #2980b9;  
-        }  
-        #info {  
-            color: white;  
-            font-family: sans-serif;  
-            font-size: 14px;  
-            margin-top: 10px;  
-        }  
-    </style>  
-</head>  
-<body>  
-  
-<div id="controls">  
-    <button onclick="roll('up')">Вверх</button>  
-    <button onclick="roll('down')">Вниз</button>  
-    <button onclick="roll('left')">Влево</button>  
-    <button onclick="roll('right')">Вправо</button>  
-    <button onclick="restart()">Restart</button>  
-    <label style="color:white;">
-      Размер поля: 
-      <input type="number" id="gridSizeInput" value="5" min="1" max="20" style="width:50px;">
-    </label>
-    <button onclick="applyGridSize()">Применить</button>
-    <div id="info"></div>  
-</div>  
-  
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>  
-<script>  
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Кантование куба с ориентацией</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
 
-let gridSize = 3; // Размер поля по умолчанию (3x3)
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: #222;
+            color: white;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
 
-// === Создание текстур с цифрами ===  
+        #app {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #viewport {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
+            width: 100%;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #viewport canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            flex: 0 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 10px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+            background: rgba(34, 34, 34, 0.92);
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+        }
+
+        button {
+            min-width: 78px;
+            min-height: 44px;
+            padding: 8px 14px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            background: #3498db;
+            color: white;
+            border-radius: 6px;
+            transition: background 0.3s;
+            touch-action: manipulation;
+        }
+
+        button:hover,
+        button:focus-visible {
+            background: #2980b9;
+        }
+
+        label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+            color: white;
+        }
+
+        input[type="number"] {
+            width: 64px;
+            min-height: 36px;
+            padding: 4px 6px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+        }
+
+        #info {
+            flex-basis: 100%;
+            color: white;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        @media (max-width: 520px) {
+            #controls {
+                gap: 6px;
+                padding-top: 8px;
+            }
+
+            button {
+                min-width: 70px;
+                padding: 8px 10px;
+                font-size: 14px;
+            }
+
+            label {
+                flex-basis: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="viewport" aria-label="Трёхмерная сцена с кубиком"></div>
+
+    <div id="controls">
+        <button type="button" onclick="roll('up')">Вверх</button>
+        <button type="button" onclick="roll('down')">Вниз</button>
+        <button type="button" onclick="roll('left')">Влево</button>
+        <button type="button" onclick="roll('right')">Вправо</button>
+        <button type="button" onclick="restart()">Restart</button>
+        <label>
+            Размер поля:
+            <input type="number" id="gridSizeInput" value="5" min="1" max="20" inputmode="numeric">
+        </label>
+        <button type="button" onclick="applyGridSize()">Применить</button>
+        <div id="info"></div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+
+const viewport = document.getElementById('viewport');
+const gridSizeInput = document.getElementById('gridSizeInput');
+let gridSize = parseInt(gridSizeInput.value, 10) || 5;
+
+// === Создание текстур с цифрами ===
 // Для каждой стороны куба создаём canvas-текстуру с белой рамкой и цифрой.
-function createNumberTexture(number) {  
-    const size = 256;  
-    const canvas = document.createElement('canvas');  
-    canvas.width = size;  
-    canvas.height = size;  
-    const ctx = canvas.getContext('2d');  
-  
-    ctx.clearRect(0, 0, size, size);  
-  
-    ctx.strokeStyle = 'white';  
-    ctx.lineWidth = 8;  
-    ctx.strokeRect(0, 0, size, size);  
-  
-    ctx.fillStyle = 'white';  
-    ctx.font = 'bold 180px sans-serif';  
-    ctx.textAlign = 'center';  
-    ctx.textBaseline = 'middle';  
-    ctx.fillText(number.toString(), size / 2, size / 2);  
-  
-    const texture = new THREE.CanvasTexture(canvas);  
-    return texture;  
-}  
-  
-// Сцена, камера, рендер  
-// Базовая настройка Three.js: сцена, камера и рендерер во весь экран.
-const scene = new THREE.Scene();  
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);  
-const renderer = new THREE.WebGLRenderer({antialias: true});  
-renderer.setSize(window.innerWidth, window.innerHeight);  
-document.body.appendChild(renderer.domElement);  
-  
-// Освещение  
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));  
-const directional = new THREE.DirectionalLight(0xffffff, 0.8);  
-directional.position.set(5, 10, 7);  
-scene.add(directional);  
-  
-// Сетка  
+function createNumberTexture(number) {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    ctx.clearRect(0, 0, size, size);
+
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(0, 0, size, size);
+
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 180px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(number.toString(), size / 2, size / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
+}
+
+// Сцена, камера, рендер
+// Рендерер живёт внутри отдельного контейнера, а не растягивается поверх всей страницы.
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+viewport.appendChild(renderer.domElement);
+
+// Освещение
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const directional = new THREE.DirectionalLight(0xffffff, 0.8);
+directional.position.set(5, 10, 7);
+scene.add(directional);
+
+// Сетка
 // Визуальная сетка, соответствующая игровому полю.
-let grid = new THREE.GridHelper(gridSize, gridSize, 0x888888, 0x444444); 
+let grid = new THREE.GridHelper(gridSize, gridSize, 0x888888, 0x444444);
 grid.position.y = -0.01;
-scene.add(grid);  
+scene.add(grid);
+
+function getViewportSize() {
+    return {
+        width: Math.max(1, viewport.clientWidth),
+        height: Math.max(1, viewport.clientHeight)
+    };
+}
+
+function resizeRendererToViewport() {
+    const { width, height } = getViewportSize();
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height, false);
+}
 
 function centerCamera() {
-    // Центрируем камеру так, чтобы всё поле было в кадре.
-    const distance = gridSize * 1.2;
-    camera.position.set(-distance/2, distance * 0.8, distance);
-    camera.lookAt(0, 0, 0);
+    // Подбираем дистанцию по меньшему из вертикального и горизонтального углов обзора.
+    // Так всё поле вместе с кубиком остаётся видимым на широких и узких экранах.
+    const { width, height } = getViewportSize();
+    const aspect = width / height;
+    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+    const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * aspect);
+    const limitingFov = Math.min(verticalFov, horizontalFov);
+
+    const halfBoard = gridSize / 2;
+    const boundingRadius = Math.sqrt(halfBoard * halfBoard + halfBoard * halfBoard + 1.2 * 1.2);
+    const distance = (boundingRadius / Math.sin(limitingFov / 2)) * 1.08;
+
+    const target = new THREE.Vector3(0, 0.25, 0);
+    const direction = new THREE.Vector3(-0.45, 0.65, 1).normalize();
+
+    camera.position.copy(target).add(direction.multiplyScalar(distance));
+    camera.lookAt(target);
+    camera.near = Math.max(0.01, distance / 100);
+    camera.far = Math.max(1000, distance * 4);
+    camera.updateProjectionMatrix();
 }
-centerCamera();
 
-// === Куб с цифрами и прозрачностью ===  
+function layoutScene() {
+    resizeRendererToViewport();
+    centerCamera();
+}
+
+layoutScene();
+
+if ('ResizeObserver' in window) {
+    const resizeObserver = new ResizeObserver(layoutScene);
+    resizeObserver.observe(viewport);
+}
+window.addEventListener('resize', layoutScene);
+
+// === Куб с цифрами и прозрачностью ===
 // Материалы для каждой стороны куба в порядке BoxGeometry.
-const cubeSize = 1;  
+const cubeSize = 1;
 
-const numberMap = [3, 4, 1, 6, 2, 5]; // по порядку сторон в BoxGeometry  
-const materials = numberMap.map(n => new THREE.MeshPhongMaterial({  
-    map: createNumberTexture(n),  
-    transparent: false, //true,
-    opacity: 0.5  
-}));  
-  
-const angle = Math.PI / 2;  
-const speed = 0.07;  
-  
+const numberMap = [3, 4, 1, 6, 2, 5]; // по порядку сторон в BoxGeometry
+const materials = numberMap.map(n => new THREE.MeshPhongMaterial({
+    map: createNumberTexture(n),
+    transparent: false,
+    opacity: 0.5
+}));
+
+const angle = Math.PI / 2;
+const speed = 0.07;
+
 // Куб, который будем перекатывать по сетке.
-const cube = new THREE.Mesh(  
-    new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize),  
-    materials  
-);  
-  
-let cubeshift = (gridSize%2==0) ? 0.5 : 0;
-cube.position.set(cubeshift, 0.5, cubeshift);  
-scene.add(cube);  
-  
-// Переменные состояния  
-let isRotating = false;  
-  
-const worldQuat = new THREE.Quaternion();  
-  
-// === Функция кантования ===  
+const cube = new THREE.Mesh(
+    new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize),
+    materials
+);
+
+let cubeshift = (gridSize % 2 === 0) ? 0.5 : 0;
+cube.position.set(cubeshift, 0.5, cubeshift);
+scene.add(cube);
+
+// Переменные состояния
+let isRotating = false;
+
+const worldQuat = new THREE.Quaternion();
+
+// === Функция кантования ===
 // Поворот на 90° вокруг ребра с помощью временного pivot-объекта.
-function roll(direction) {  
-    if (isRotating) return;  
-  
-    const axis = new THREE.Vector3();  
-    const pivot = new THREE.Object3D();  
-  
-    let pivotX = cube.position.x - 0.5;  
-    let pivotZ = cube.position.z - 0.5;  
-  
-    if (direction === 'up') {  
-        axis.set(-1, 0, 0);  
+function roll(direction) {
+    if (isRotating) return;
+
+    const axis = new THREE.Vector3();
+    const pivot = new THREE.Object3D();
+
+    let pivotX = cube.position.x - 0.5;
+    let pivotZ = cube.position.z - 0.5;
+
+    if (direction === 'up') {
+        axis.set(-1, 0, 0);
         // Запрет выхода за границу.
-        if(Math.abs(pivotZ) > (gridSize-1)/2.){ return;}
-    }  
-    if (direction === 'down') {  
-        axis.set(1, 0, 0);  
-        pivotZ += 1;  
+        if (Math.abs(pivotZ) > (gridSize - 1) / 2) { return; }
+    }
+    if (direction === 'down') {
+        axis.set(1, 0, 0);
+        pivotZ += 1;
         // Запрет выхода за границу.
-        if(Math.abs(pivotZ) > (gridSize-1)/2.){ return;}
-    }  
-    if (direction === 'left') {  
-        axis.set(0, 0, 1);  
+        if (Math.abs(pivotZ) > (gridSize - 1) / 2) { return; }
+    }
+    if (direction === 'left') {
+        axis.set(0, 0, 1);
         // Запрет выхода за границу.
-        if(Math.abs(pivotX) > (gridSize-1)/2.){ return;}
-    }  
-    if (direction === 'right') {  
-        axis.set(0, 0, -1);  
-        pivotX += 1;  
+        if (Math.abs(pivotX) > (gridSize - 1) / 2) { return; }
+    }
+    if (direction === 'right') {
+        axis.set(0, 0, -1);
+        pivotX += 1;
         // Запрет выхода за границу.
-        if(Math.abs(pivotX) > (gridSize-1)/2.){ return;}
-    }  
-  
+        if (Math.abs(pivotX) > (gridSize - 1) / 2) { return; }
+    }
+
     // Временно вынимаем куб из сцены и добавляем к pivot.
-    scene.remove(cube);  
-  
-    pivot.position.set(pivotX, 0, pivotZ);  
-    pivot.rotation.set(0,0,0);  
-    scene.add(pivot);  
-    pivot.add(cube);  
-  
+    scene.remove(cube);
+
+    pivot.position.set(pivotX, 0, pivotZ);
+    pivot.rotation.set(0, 0, 0);
+    scene.add(pivot);
+    pivot.add(cube);
+
     // Переводим куб к правильному ребру pivot перед вращением.
-    const dx = (direction === 'left') ? 0 : (direction === 'right') ? -1 : 0;  
-    const dz = (direction === 'up') ? 0 : (direction === 'down') ? -1 : 0;  
-    cube.position.set(0.5 + dx, 0.5, 0.5 + dz);  
-  
-    isRotating = true;  
-    let rotated = 0;  
-    function animateRotation() {  
+    const dx = (direction === 'left') ? 0 : (direction === 'right') ? -1 : 0;
+    const dz = (direction === 'up') ? 0 : (direction === 'down') ? -1 : 0;
+    cube.position.set(0.5 + dx, 0.5, 0.5 + dz);
+
+    isRotating = true;
+    let rotated = 0;
+    function animateRotation() {
         // Плавная анимация поворота на 90°.
-        const step = Math.min(speed, angle - rotated);  
-        pivot.rotateOnAxis(axis, step);  
-        rotated += step;  
-        if (rotated < angle) {  
-            requestAnimationFrame(animateRotation);  
-        } else {  
+        const step = Math.min(speed, angle - rotated);
+        pivot.rotateOnAxis(axis, step);
+        rotated += step;
+        if (rotated < angle) {
+            requestAnimationFrame(animateRotation);
+        } else {
             // Фиксируем итоговую ориентацию в мировых координатах.
-            cube.updateMatrixWorld(true);  
-            cube.getWorldQuaternion(worldQuat);  
-  
-            pivot.remove(cube);  
-            scene.remove(pivot);  
-  
-            scene.add(cube);  
-            cube.quaternion.copy(worldQuat);  
-  
+            cube.updateMatrixWorld(true);
+            cube.getWorldQuaternion(worldQuat);
+
+            pivot.remove(cube);
+            scene.remove(pivot);
+
+            scene.add(cube);
+            cube.quaternion.copy(worldQuat);
+
             // Возвращаем куб в сцену и корректируем позицию.
-            const dx = (direction === 'left') ? -1 : (direction === 'right') ? 0 : 0;  
-            const dz = (direction === 'up') ? -1 : (direction === 'down') ? 0 : 0;  
-            cube.position.set(pivotX + 0.5 + dx, 0.5, pivotZ + 0.5 + dz);  
-  
-            isRotating = false;   
-        }  
-    }  
-    animateRotation();  
-}  
-  
-// === Анимация сцены ===  
+            const dx = (direction === 'left') ? -1 : (direction === 'right') ? 0 : 0;
+            const dz = (direction === 'up') ? -1 : (direction === 'down') ? 0 : 0;
+            cube.position.set(pivotX + 0.5 + dx, 0.5, pivotZ + 0.5 + dz);
+
+            isRotating = false;
+        }
+    }
+    animateRotation();
+}
+
+// === Анимация сцены ===
 // Непрерывный рендеринг; вращение запускается отдельно.
-function animate() {  
-    requestAnimationFrame(animate);  
-    renderer.render(scene, camera);  
-}  
-animate();  
-  
-// === Адаптивность окна ===  
-// Сохраняем корректные пропорции при изменении размеров окна.
-window.addEventListener('resize', () => {  
-    camera.aspect = window.innerWidth/window.innerHeight;  
-    camera.updateProjectionMatrix();  
-    renderer.setSize(window.innerWidth, window.innerHeight);  
-});  
-  
-// === Управление клавишами курсора ===  
+function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+}
+animate();
+
+// === Управление клавишами курсора ===
 // Поддержка стрелок клавиатуры.
-window.addEventListener('keydown', (event) => {  
-    if (event.key === 'ArrowUp') {  
-        roll('up');  
-    }  
-    if (event.key === 'ArrowDown') {  
-        roll('down');  
-    }  
-    if (event.key === 'ArrowLeft') {  
-        roll('left');  
-    }  
-    if (event.key === 'ArrowRight') {  
-        roll('right');  
-    }  
-});  
-  
-  
-function restart() {  
+window.addEventListener('keydown', (event) => {
+    if (event.target instanceof HTMLInputElement) return;
+
+    const directions = {
+        ArrowUp: 'up',
+        ArrowDown: 'down',
+        ArrowLeft: 'left',
+        ArrowRight: 'right'
+    };
+    const direction = directions[event.key];
+    if (direction) {
+        event.preventDefault();
+        roll(direction);
+    }
+});
+
+function restart() {
     // Сброс положения и ориентации куба к начальному состоянию.
-    if (isRotating) return; // Не сбрасывать во время поворота  
-  
-    cubeshift = (gridSize%2==0) ? 0.5 : 0;
-    cube.position.set(cubeshift, 0.5, cubeshift);  
-    cube.rotation.set(0, 0, 0);  
-    cube.quaternion.set(0, 0, 0, 1); // Сброс quaternion, если используется  
-}  
+    if (isRotating) return; // Не сбрасывать во время поворота
+
+    cubeshift = (gridSize % 2 === 0) ? 0.5 : 0;
+    cube.position.set(cubeshift, 0.5, cubeshift);
+    cube.rotation.set(0, 0, 0);
+    cube.quaternion.set(0, 0, 0, 1); // Сброс quaternion, если используется
+}
 
 function updateGrid() {
     // Пересоздаём сетку при изменении размера поля.
     scene.remove(grid);
     grid = new THREE.GridHelper(gridSize, gridSize, 0x888888, 0x444444);
+    grid.position.y = -0.01;
     scene.add(grid);
 }
 
 function applyGridSize() {
     // Применяем размер поля из инпута и перезапускаем сцену.
-    const input = document.getElementById('gridSizeInput');
-    const value = parseInt(input.value);
+    const value = parseInt(gridSizeInput.value, 10);
     if (!isNaN(value) && value >= 1 && value <= 20) {
         gridSize = value;
         updateGrid();
         restart();
-        centerCamera();
+        layoutScene();
     }
 }
 
-</script>  
-  
-</body>  
+</script>
+
+</body>
 </html>
