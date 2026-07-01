@@ -161,8 +161,9 @@ Good places for future work
 - External-cell rule experiments:
       rotationFromTwoReflections()
       pendingNormals handling in runMove()
-- Wireframe / center number design:
-      makeCenterNumberTexture()
+- Face marker / texture design:
+      makeFaceTexture()
+      makeMarkerTexture()
       createCell()
 - Mobile controls:
       CSS media queries
@@ -332,8 +333,8 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   Rendering model:
     cells Map<id, THREE.Group>
       Each group contains:
-        - wireframe edge lines
-        - transparent center number plane through the cube midpoint
+        - body mesh with six face materials
+        - edge lines
         - old hidden label sprite kept only to avoid rewriting older code paths
 
   Movement:
@@ -899,40 +900,51 @@ function makeTex(lines, main=96, sub=26){
 }
 
 /*
-  makeCenterNumberTexture(id)
+  makeFaceTexture(id)
 
-  Creates the transparent texture for the number plane that passes through the
-  center of the wireframe cube.
+  Creates the texture used on ordinary numbered faces. The texture is attached
+  directly to cube faces, not rendered as a separate floating sprite.
 */
-function makeCenterNumberTexture(id){
+function makeFaceTexture(id){
   const c=document.createElement("canvas");
-  c.width=c.height=512;
+  c.width=c.height=256;
   const x=c.getContext("2d");
-  const label = String(id);
-  const pad = 14;
-  let fontSize = 500;
-
-  x.clearRect(0,0,c.width,c.height);
+  x.fillStyle="#d9e2eb";
+  x.fillRect(0,0,256,256);
+  x.fillStyle="#203040";
   x.textAlign="center";
-  x.textBaseline="alphabetic";
-  do{
-    x.font=`900 ${fontSize}px system-ui`;
-    const m = x.measureText(label);
-    const textHeight = (m.actualBoundingBoxAscent || fontSize * 0.76) + (m.actualBoundingBoxDescent || fontSize * 0.18);
-    if(m.width <= c.width - pad * 2 && textHeight <= c.height - pad * 2) break;
-    fontSize -= 4;
-  }while(fontSize > 32);
+  x.textBaseline="middle";
+  x.font='700 120px system-ui';
+  x.fillText(String(id),128,132);
+  const t=new THREE.CanvasTexture(c);
+  t.minFilter=THREE.LinearFilter;
+  t.magFilter=THREE.LinearFilter;
+  return t;
+}
 
-  const m = x.measureText(label);
-  const ascent = m.actualBoundingBoxAscent || fontSize * 0.76;
-  const descent = m.actualBoundingBoxDescent || fontSize * 0.18;
-  const y = (c.height + ascent - descent) / 2;
-  x.lineJoin = "round";
-  x.lineWidth = Math.max(12, fontSize * 0.055);
-  x.strokeStyle="rgba(5,10,18,.9)";
-  x.strokeText(label,c.width/2,y);
-  x.fillStyle="#ffffff";
-  x.fillText(label,c.width/2,y);
+/*
+  makeMarkerTexture(symbol)
+
+  Creates orientation diagnostic marks:
+      ○ initial top
+      □ initial bottom
+      ✕ initial left
+      △ initial right
+
+  These marks are important for debugging whether orientation persists correctly
+  through rolling and external-cell transitions.
+*/
+function makeMarkerTexture(symbol){
+  const c=document.createElement("canvas");
+  c.width=c.height=256;
+  const x=c.getContext("2d");
+  x.fillStyle="#d9e2eb";
+  x.fillRect(0,0,256,256);
+  x.fillStyle="#203040";
+  x.textAlign="center";
+  x.textBaseline="middle";
+  x.font='700 140px system-ui';
+  x.fillText(symbol,128,132);
   const t=new THREE.CanvasTexture(c);
   t.minFilter=THREE.LinearFilter;
   t.magFilter=THREE.LinearFilter;
@@ -941,9 +953,13 @@ function makeCenterNumberTexture(id){
 
 function setCubeOpacity(group, opacity){
   opacity = Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1;
-  const numberPlane = group.getObjectByName("numberPlane");
-  if(!numberPlane) return;
-  numberPlane.material.opacity = opacity;
+  const body = group.getObjectByName("body");
+  if(!body) return;
+  const mats = Array.isArray(body.material) ? body.material : [body.material];
+  for(const m of mats){
+    m.transparent = opacity < 0.999;
+    m.opacity = opacity;
+  }
 }
 
 function setLabel(id,line){
@@ -953,8 +969,17 @@ function setLabel(id,line){
 /*
   createCell(id)
 
-  Builds one cube cell as a THREE.Group. The cube is rendered only as a
-  wireframe; its number sits on a transparent plane through the cube center.
+  Builds one cube cell as a THREE.Group.
+
+  Face material order for THREE.BoxGeometry is:
+      +X, -X, +Y, -Y, +Z, -Z
+
+  Current face assignment:
+      +X right  -> △
+      -X left   -> ✕
+      +Y top    -> ○
+      -Y bottom -> □
+      ±Z        -> cell number
 
   The hidden label sprite is legacy-compatible scaffolding. It is kept invisible.
 */
@@ -962,19 +987,23 @@ function createCell(id){
   const g = new THREE.Group();
   g.userData.id = id;
 
-  const numberPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.96, 0.96),
-    new THREE.MeshBasicMaterial({
-      map: makeCenterNumberTexture(id),
-      transparent: true,
-      opacity: 1.0,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      depthTest: true
-    })
-  );
-  numberPlane.name = "numberPlane";
-  g.add(numberPlane);
+  const sideTexture = makeFaceTexture(id);
+  const topTexture = makeMarkerTexture("○");
+  const bottomTexture = makeMarkerTexture("□");
+  const rightTexture = makeMarkerTexture("△");
+  const leftTexture = makeMarkerTexture("✕");
+  const bodyMat = [
+    new THREE.MeshPhongMaterial({color: colors[id], map: rightTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: leftTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: topTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: bottomTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: sideTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: sideTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35})
+  ];
+
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), bodyMat);
+  cube.name = "body";
+  g.add(cube);
 
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),
@@ -1021,6 +1050,7 @@ function applyStateVisual(s){
     g.position.copy(currentPositionFor(id,s));
     g.quaternion.copy(objToQuat(s.orientations?.[id] || {x:0,y:0,z:0,w:1}));
 
+    const body = g.getObjectByName("body");
     const ed = g.getObjectByName("edges");
 
     const isActive = id === s.active;
