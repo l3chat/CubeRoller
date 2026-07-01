@@ -322,6 +322,9 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
     state.path
       Sequence of active cell IDs visited.
 
+    state.moveHistory
+      Compact sequence of move letters shown in the status panel: r/l/f/b/u/d.
+
     state.fieldPath
       Sequence of 3D field coordinates visited.
 
@@ -617,6 +620,7 @@ function cloneState(s){
     axes: cloneAxes(s.axes),
     field: {...s.field},
     path: [...s.path],
+    moveHistory: [...(s.moveHistory || [])],
     fieldPath: s.fieldPath.map(p => ({...p})),
     orientations: cloneOrientations(s.orientations),
     pendingNormals: clonePendingNormals(s.pendingNormals),
@@ -648,6 +652,7 @@ function initialState(){
     ],
     field: {x:0, y:0, z:0},
     path: [0],
+    moveHistory: [],
     fieldPath: [{x:0,y:0,z:0}],
     orientations: identityOrientations(),
     pendingNormals: identityPendingNormals(),
@@ -1122,6 +1127,13 @@ function applyStateVisual(s){
   updateInfo();
 }
 
+function moveLetter(axisIndex, sign){
+  if(axisIndex === 0) return sign > 0 ? "r" : "l";
+  if(axisIndex === 1) return sign > 0 ? "u" : "d";
+  if(axisIndex === 2) return sign > 0 ? "f" : "b";
+  return "";
+}
+
 function updateButtons(){
   const labels = [
     ["btnLeft", 0, -1, "← Влево"],
@@ -1207,6 +1219,7 @@ function makeNextState(s, axisIndex, sign){
     axes: cloneAxes(s.axes),
     field: vecToObj(field),
     path: [...s.path, B],
+    moveHistory: [...(s.moveHistory || []), moveLetter(axisIndex, sign)],
     fieldPath: [...s.fieldPath.map(p => ({...p})), vecToObj(field)],
     orientations: cloneOrientations(s.orientations),
     pendingNormals: clonePendingNormals(s.pendingNormals),
@@ -1542,12 +1555,10 @@ function applyFieldSize(){
 function updateInfo(move=null){
   const el = document.getElementById("info");
   const p = state.field;
+  const moves = (state.moveHistory || []).join("");
   el.textContent = [
-    `${state.active}   (${p.x}, ${p.y}, ${p.z})`,
-    `X +${state.axes[0].plus}  -${state.axes[0].minus}`,
-    `Y +${state.axes[1].plus}  -${state.axes[1].minus}`,
-    `Z +${state.axes[2].plus}  -${state.axes[2].minus}`,
-    state.path.join(", ")
+    `(${p.x}, ${p.y}, ${p.z})`,
+    moves || "-"
   ].join("\n");
 }
 
