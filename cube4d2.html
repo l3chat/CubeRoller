@@ -914,13 +914,17 @@ function drawMaxFaceGlyph(ctx, text, weight=800, pad=10){
   Creates the texture used on ordinary numbered faces. The texture is attached
   directly to cube faces, not rendered as a separate floating sprite.
 */
-function makeFaceTexture(id){
+function makeFaceTexture(id, mirrored=false){
   const c=document.createElement("canvas");
   c.width=c.height=256;
   const x=c.getContext("2d");
   x.fillStyle="#d9e2eb";
   x.fillRect(0,0,256,256);
   x.fillStyle="#203040";
+  if(mirrored){
+    x.translate(256, 0);
+    x.scale(-1, 1);
+  }
   drawMaxFaceGlyph(x, String(id), 850, 8);
   const t=new THREE.CanvasTexture(c);
   t.minFilter=THREE.LinearFilter;
@@ -929,25 +933,56 @@ function makeFaceTexture(id){
 }
 
 /*
-  makeMarkerTexture(symbol)
+  makeMarkerTexture(kind)
 
-  Creates orientation diagnostic marks:
-      ○ initial top
-      □ initial bottom
-      ✕ initial left
-      △ initial right
+  Creates orientation diagnostic dot marks:
+      center    initial top, with dot count equal to cell id
+      blank     initial bottom
+      topRight  initial left, with dot count equal to cell id
+      topLeft   initial right, with dot count equal to cell id
+      id 0      uses a small square instead of dots
 
   These marks are important for debugging whether orientation persists correctly
   through rolling and external-cell transitions.
 */
-function makeMarkerTexture(symbol){
+function makeMarkerTexture(kind, id){
   const c=document.createElement("canvas");
   c.width=c.height=256;
   const x=c.getContext("2d");
   x.fillStyle="#d9e2eb";
   x.fillRect(0,0,256,256);
-  x.fillStyle="#203040";
-  drawMaxFaceGlyph(x, symbol, 850, 8);
+
+  if(kind !== "blank"){
+    const anchors = {
+      center: [128,128],
+      topRight: [188,68],
+      topLeft: [68,68]
+    };
+    const layouts = {
+      1:[[0,0]],
+      2:[[-18,-18],[18,18]],
+      3:[[-20,-20],[0,0],[20,20]],
+      4:[[-20,-20],[20,-20],[-20,20],[20,20]],
+      5:[[-22,-22],[22,-22],[0,0],[-22,22],[22,22]],
+      6:[[-22,-28],[22,-28],[-22,0],[22,0],[-22,28],[22,28]],
+      7:[[-24,-30],[24,-30],[-24,0],[0,0],[24,0],[-24,30],[24,30]]
+    };
+    const anchor = anchors[kind];
+    if(anchor){
+      x.fillStyle="#203040";
+      if(id === 0){
+        x.fillRect(anchor[0] - 12, anchor[1] - 12, 24, 24);
+      } else {
+        const dots = layouts[id] || [];
+        for(const [dx, dy] of dots){
+          x.beginPath();
+          x.arc(anchor[0] + dx, anchor[1] + dy, 9, 0, Math.PI * 2);
+          x.fill();
+        }
+      }
+    }
+  }
+
   const t=new THREE.CanvasTexture(c);
   t.minFilter=THREE.LinearFilter;
   t.magFilter=THREE.LinearFilter;
@@ -978,11 +1013,12 @@ function setLabel(id,line){
       +X, -X, +Y, -Y, +Z, -Z
 
   Current face assignment:
-      +X right  -> △
-      -X left   -> ✕
-      +Y top    -> ○
-      -Y bottom -> □
-      ±Z        -> cell number
+      +X right  -> top-left dot
+      -X left   -> top-right dot
+      +Y top    -> center dot
+      -Y bottom -> blank
+      +Z        -> cell number
+      -Z        -> mirrored cell number
 
   The hidden label sprite is legacy-compatible scaffolding. It is kept invisible.
 */
@@ -990,18 +1026,19 @@ function createCell(id){
   const g = new THREE.Group();
   g.userData.id = id;
 
-  const sideTexture = makeFaceTexture(id);
-  const topTexture = makeMarkerTexture("○");
-  const bottomTexture = makeMarkerTexture("□");
-  const rightTexture = makeMarkerTexture("△");
-  const leftTexture = makeMarkerTexture("✕");
+  const frontNumberTexture = makeFaceTexture(id);
+  const backNumberTexture = makeFaceTexture(id, true);
+  const topTexture = makeMarkerTexture("center", id);
+  const bottomTexture = makeMarkerTexture("blank", id);
+  const rightTexture = makeMarkerTexture("topLeft", id);
+  const leftTexture = makeMarkerTexture("topRight", id);
   const bodyMat = [
     new THREE.MeshPhongMaterial({color: colors[id], map: rightTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
     new THREE.MeshPhongMaterial({color: colors[id], map: leftTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
     new THREE.MeshPhongMaterial({color: colors[id], map: topTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
     new THREE.MeshPhongMaterial({color: colors[id], map: bottomTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
-    new THREE.MeshPhongMaterial({color: colors[id], map: sideTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
-    new THREE.MeshPhongMaterial({color: colors[id], map: sideTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35})
+    new THREE.MeshPhongMaterial({color: colors[id], map: frontNumberTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35}),
+    new THREE.MeshPhongMaterial({color: colors[id], map: backNumberTexture, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: true, shininess: 35})
   ];
 
   const cube = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), bodyMat);
