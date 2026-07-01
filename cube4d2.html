@@ -719,6 +719,7 @@ function applyLocalFog(){
   rebuildProjections()
 
   Draws red surface projections of the active cube center on back field faces.
+  Red surface lines are one-per-axis and mutually perpendicular.
   The selected far faces update as OrbitControls moves the camera.
 */
 function projectionBackSigns(){
@@ -757,14 +758,6 @@ function rebuildProjections(){
     mesh.position.add(n.multiplyScalar(surfaceOffset));
   }
 
-  function faceNormalForSegment(a, b){
-    const eps = 1e-6;
-    if(Math.abs(a.x - b.x) < eps && Math.abs(Math.abs(a.x) - half) < eps) return new THREE.Vector3(Math.sign(a.x),0,0);
-    if(Math.abs(a.y - b.y) < eps && Math.abs(Math.abs(a.y) - half) < eps) return new THREE.Vector3(0,Math.sign(a.y),0);
-    if(Math.abs(a.z - b.z) < eps && Math.abs(Math.abs(a.z) - half) < eps) return new THREE.Vector3(0,0,Math.sign(a.z));
-    return null;
-  }
-
   function isVisibleFace(normal){
     if(!normal) return false;
     if(Math.abs(normal.x) > 0.5) return Math.sign(normal.x) === backSigns.x;
@@ -773,58 +766,49 @@ function rebuildProjections(){
     return false;
   }
 
-  function addSurfaceSegment(a, b, normal){
+  function addMarkedSurfaceSegment(a, b, normal){
     const offset = normal.clone().normalize().multiplyScalar(surfaceOffset);
     const line = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints([a.clone().add(offset), b.clone().add(offset)]),
       lineMat.clone()
     );
     projectionGroup.add(line);
-  }
 
-  function addSurfaceLoop(points){
-    const closed = [...points, points[0]];
-    for(let i=0; i<closed.length-1; i++){
-      const a = closed[i];
-      const b = closed[i+1];
-      const segment = b.clone().sub(a);
-      const len = segment.length();
-      if(len < 1e-6) continue;
-      const normal = faceNormalForSegment(a, b);
-      if(!isVisibleFace(normal)) continue;
-      addSurfaceSegment(a, b, normal);
-
-      const dir = segment.clone().normalize();
-      for(let d=spacing; d<len-1e-6; d+=spacing){
-        const mark = new THREE.Mesh(markGeo, markMat.clone());
-        mark.position.copy(a).add(dir.clone().multiplyScalar(d));
-        orientOnFace(mark, normal);
-        projectionGroup.add(mark);
-      }
+    const segment = b.clone().sub(a);
+    const len = segment.length();
+    if(len < 1e-6) return;
+    const dir = segment.clone().normalize();
+    for(let d=spacing; d<len-1e-6; d+=spacing){
+      const mark = new THREE.Mesh(markGeo, markMat.clone());
+      mark.position.copy(a).add(dir.clone().multiplyScalar(d));
+      orientOnFace(mark, normal);
+      projectionGroup.add(mark);
     }
   }
 
-  const surfaceLoops = [
-    [
-      new THREE.Vector3(p.x,-half,-half),
-      new THREE.Vector3(p.x, half,-half),
-      new THREE.Vector3(p.x, half, half),
-      new THREE.Vector3(p.x,-half, half)
-    ],
-    [
-      new THREE.Vector3(-half,p.y,-half),
-      new THREE.Vector3( half,p.y,-half),
-      new THREE.Vector3( half,p.y, half),
-      new THREE.Vector3(-half,p.y, half)
-    ],
-    [
-      new THREE.Vector3(-half,-half,p.z),
-      new THREE.Vector3( half,-half,p.z),
-      new THREE.Vector3( half, half,p.z),
-      new THREE.Vector3(-half, half,p.z)
-    ]
+  const xBack = backSigns.x * half;
+  const yBack = backSigns.y * half;
+  const zBack = backSigns.z * half;
+  const directionalSegments = [
+    {
+      a:new THREE.Vector3(-half, p.y, zBack),
+      b:new THREE.Vector3( half, p.y, zBack),
+      normal:new THREE.Vector3(0,0,backSigns.z)
+    },
+    {
+      a:new THREE.Vector3(xBack, -half, p.z),
+      b:new THREE.Vector3(xBack,  half, p.z),
+      normal:new THREE.Vector3(backSigns.x,0,0)
+    },
+    {
+      a:new THREE.Vector3(p.x, yBack, -half),
+      b:new THREE.Vector3(p.x, yBack,  half),
+      normal:new THREE.Vector3(0,backSigns.y,0)
+    }
   ];
-  for(const loop of surfaceLoops) addSurfaceLoop(loop);
+  for(const seg of directionalSegments){
+    if(isVisibleFace(seg.normal)) addMarkedSurfaceSegment(seg.a, seg.b, seg.normal);
+  }
 
   const specs = [
     {pos:[-half, p.y, p.z], normal:new THREE.Vector3(-1,0,0)},
@@ -1426,13 +1410,15 @@ function reset(){
 /*
   rebuildField()
 
-  Draws the outer boundary of the 3D field. The internal grid was removed
-  because it visually interfered on smartphones.
+  Draws the outer boundary of the 3D field on the same surfaces used by the red
+  wall projections. The internal grid was removed because it visually interfered
+  on smartphones.
 */
 function rebuildField(){
   clearGroup(fieldGroup);
 
-  const box = new THREE.BoxGeometry(fieldSize, fieldSize, fieldSize);
+  const fieldSpan = fieldSize - 1;
+  const box = new THREE.BoxGeometry(fieldSpan, fieldSpan, fieldSpan);
   const edges = new THREE.EdgesGeometry(box);
   const border = new THREE.LineSegments(
     edges,
