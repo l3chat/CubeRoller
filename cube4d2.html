@@ -847,7 +847,8 @@ function rebuildProjections(){
 }
 
 function externalFallbackPositionFor(s){
-  return fieldVec(s).add(new THREE.Vector3(2.35, 1.45, 0));
+  // Initial external cell 7 sits behind cell 5 on the local forward axis.
+  return fieldVec(s).add(dirVectors[2].clone().multiplyScalar(2.35));
 }
 
 function externalStoredPositionFor(id, s){
