@@ -100,8 +100,11 @@ Relevant function:
 Persistent cube orientation
 ---------------------------
 The external cube remains visible after it leaves the unfolding. Its outside
-position is stored in state.externalPositions[id] until it returns; on return it
-moves along a high clearance arc while slerping to the required orientation.
+position is stored in state.externalPositions[id] until it returns. On return it
+moves along a high clearance arc while slerping to the required orientation,
+except when it comes back through the same face in the opposite direction; that
+back-through-same-face return snaps directly into the unfolding with no return
+animation.
 
 Every cube stores its current orientation in:
 
@@ -1109,6 +1112,13 @@ function rotateAround(object, pivot, axis, angle){
   object.quaternion.premultiply(q);
 }
 
+function backThroughSameFaceObj(normalObj, normal, eps=1e-6){
+  if(!normalObj || !normal) return false;
+  const a = objToVec(normalObj);
+  if(a.lengthSq() < eps || normal.lengthSq() < eps) return false;
+  return a.normalize().dot(normal.clone().normalize()) < -1 + eps;
+}
+
 function arcPoint(start, target, center, lift, t){
   const mid = start.clone().lerp(target, 0.5);
   const chord = target.clone().sub(start);
@@ -1240,8 +1250,11 @@ function runMove(axisIndex, sign){
   cells.get(B).userData.baseEdgeColor = 0xaebdca;
 
   // Анимация смены внешнего кубика:
-  // enter (бывший внешний) возвращается по дуге из сохранённой внешней позиции
-  // и одновременно получает нужный поворот; out остаётся видимым на месте выхода.
+  // enter (бывший внешний) обычно возвращается по дуге из сохранённой внешней позиции
+  // и одновременно получает нужный поворот; если он возвращается назад через ту же грань,
+  // через которую вышел, возвратная анимация не нужна. Продолжение в ту же сторону
+  // (например, вперёд-вперёд) остаётся дуговым.
+  const sameFaceReturn = backThroughSameFaceObj(state.pendingNormals?.[enter], bDir);
   next.externalPositions[enter] = null;
   const enterGroup = cells.get(enter);
   const enterEdges = enterGroup.getObjectByName("edges");
@@ -1250,7 +1263,7 @@ function runMove(axisIndex, sign){
   const enterTargetPosition = currentPositionFor(enter, next);
   const enterStartQuaternion = objToQuat(state.orientations?.[enter] || {x:0,y:0,z:0,w:1});
   enterGroup.visible = true;
-  enterGroup.position.copy(enterStartPosition);
+  enterGroup.position.copy(sameFaceReturn ? enterTargetPosition : enterStartPosition);
   enterGroup.quaternion.copy(enterStartQuaternion);
   // Вместо двух зеркальных отражений применяем один собственный поворот:
   // первое отражение было бы при уходе во внешний статус,
@@ -1320,8 +1333,13 @@ function runMove(axisIndex, sign){
     // и плавно передаём яркость активного кубика от A к B.
     const sample = per[spinners[0]];
     const fade = sample && sample.angle > 1e-9 ? Math.min(1, sample.done / sample.angle) : 1;
-    enterGroup.position.copy(arcPoint(enterStartPosition, enterTargetPosition, enterArcCenter, enterArcLift, fade));
-    enterGroup.quaternion.slerpQuaternions(enterStartQuaternion, enterTargetQuaternion, fade);
+    if(sameFaceReturn){
+      enterGroup.position.copy(enterTargetPosition);
+      enterGroup.quaternion.copy(enterTargetQuaternion);
+    } else {
+      enterGroup.position.copy(arcPoint(enterStartPosition, enterTargetPosition, enterArcCenter, enterArcLift, fade));
+      enterGroup.quaternion.slerpQuaternions(enterStartQuaternion, enterTargetQuaternion, fade);
+    }
     outGroup.position.copy(outStartPosition);
     enterEdges.material.opacity = 0.75;
     setCubeOpacity(enterGroup, 1.0);
