@@ -449,15 +449,15 @@ function setCameraForViewport(){
   const verticalFov = THREE.MathUtils.degToRad(compact ? 56 : 48);
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const fitFov = Math.max(0.01, Math.min(verticalFov, horizontalFov));
-  const distance = fieldRadius / Math.sin(fitFov / 2) * 1.08;
-  const direction = new THREE.Vector3(-0.62, 0.52, 0.72).normalize();
+  const distance = fieldRadius / Math.sin(fitFov / 2) * 1.00;
+  const direction = new THREE.Vector3(-0.68, 0.28, 0.76).normalize();
 
   camera.fov = THREE.MathUtils.radToDeg(verticalFov);
   controls.target.set(0, 0, 0);
   camera.position.copy(direction.multiplyScalar(distance));
   camera.near = 0.05;
   camera.far = distance + fieldRadius * 3.5;
-  controls.minDistance = fieldRadius * 1.35;
+  controls.minDistance = distance * 0.82;
   controls.maxDistance = distance * 1.45;
   camera.updateProjectionMatrix();
   camera.lookAt(controls.target);
