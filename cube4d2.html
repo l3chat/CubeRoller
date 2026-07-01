@@ -889,6 +889,25 @@ function makeTex(lines, main=96, sub=26){
   return t;
 }
 
+function drawMaxFaceGlyph(ctx, text, weight=800, pad=10){
+  let fontSize = 244;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  do{
+    ctx.font = weight + " " + fontSize + "px system-ui";
+    const m = ctx.measureText(text);
+    const height = (m.actualBoundingBoxAscent || fontSize * 0.76) + (m.actualBoundingBoxDescent || fontSize * 0.18);
+    if(m.width <= 256 - pad * 2 && height <= 256 - pad * 2) break;
+    fontSize -= 2;
+  }while(fontSize > 24);
+
+  const m = ctx.measureText(text);
+  const ascent = m.actualBoundingBoxAscent || fontSize * 0.76;
+  const descent = m.actualBoundingBoxDescent || fontSize * 0.18;
+  const y = (256 + ascent - descent) / 2;
+  ctx.fillText(text, 128, y);
+}
+
 /*
   makeFaceTexture(id)
 
@@ -902,10 +921,7 @@ function makeFaceTexture(id){
   x.fillStyle="#d9e2eb";
   x.fillRect(0,0,256,256);
   x.fillStyle="#203040";
-  x.textAlign="center";
-  x.textBaseline="middle";
-  x.font='700 120px system-ui';
-  x.fillText(String(id),128,132);
+  drawMaxFaceGlyph(x, String(id), 850, 8);
   const t=new THREE.CanvasTexture(c);
   t.minFilter=THREE.LinearFilter;
   t.magFilter=THREE.LinearFilter;
@@ -931,10 +947,7 @@ function makeMarkerTexture(symbol){
   x.fillStyle="#d9e2eb";
   x.fillRect(0,0,256,256);
   x.fillStyle="#203040";
-  x.textAlign="center";
-  x.textBaseline="middle";
-  x.font='700 140px system-ui';
-  x.fillText(symbol,128,132);
+  drawMaxFaceGlyph(x, symbol, 850, 8);
   const t=new THREE.CanvasTexture(c);
   t.minFilter=THREE.LinearFilter;
   t.magFilter=THREE.LinearFilter;
