@@ -115,24 +115,29 @@ explicitly requires a new convention.
 
 The marks on the cube faces make orientation errors visible:
 
-    top face in initial orientation:       ○
-    bottom face in initial orientation:    □
-    left face in initial orientation:      ✕
-    right face in initial orientation:     △
-    remaining side faces:                  cube number
+    top face in initial orientation:       centered dots
+    bottom face in initial orientation:    blank marker face
+    left face in initial orientation:      top-right dots
+    right face in initial orientation:     top-left dots
+    numbered side faces:                   cube number (+Z normal, mirrored -Z back)
 
+The dot count equals the cell id; cell 0 uses a small square instead of dots.
 This is intentional. If face marks behave strangely, the problem is usually in
 orientation storage or the external-cell entering/leaving rule.
 
 Rendering notes
 ---------------
-- Cubes are opaque.
+- Ordinary local-unfolding cubes are opaque; the external cube stays visible
+  as a semi-transparent outside cell.
 - Cube numbers/marks are textures attached to faces, not floating sprites.
-- Red circles on the field walls are projections of the active cube center.
+- Red wall marks project the active cube center onto dynamically selected back
+  faces, with one mutually perpendicular red surface line per coordinate axis.
 - The internal coordinate grid was removed; only the field boundary box remains.
 - The Three.js canvas lives in #sceneFrame; controls live outside it so they do
   not cover the field.
-- Mobile layout includes a compact bottom panel and a UI toggle button.
+- Responsive controls use a right-side panel in landscape and a compact bottom
+  panel in portrait. Navigation buttons are one column in side-panel layouts
+  and one row in portrait bottom-panel layouts.
 
 Codex-agent editing guidelines
 ------------------------------
@@ -194,6 +199,7 @@ Good places for future work
   Codex note:
   - Desktop and mobile layouts share the same DOM.
   - The responsive control surface is CSS-driven and does not affect movement state.
+  - Navigation buttons are intentionally linear: a side-panel column or a portrait row.
   - The UI button toggles body.ui-hidden, hiding #panel without affecting the scene.
 */
 :root{--bg0:#0d1117;--bg1:#172033;--panel:rgba(8,12,20,.92);--panel2:rgba(22,31,48,.82);--line:rgba(151,190,235,.24);--text:#eaf3ff;--muted:#abc2dc;--accent:#4da6ff;--gold:#d69e2e;--green:#14815f;--danger:#475569}
@@ -207,8 +213,8 @@ body{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minma
 body.ui-hidden #panel{display:none}
 body.ui-hidden{grid-template-columns:minmax(0,1fr) 0}
 .control-section{display:grid;gap:6px}
-.move-pad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"up up up" "left forward right" "down back back";gap:6px}
-#btnUp{grid-area:up}#btnLeft{grid-area:left}#btnForward{grid-area:forward}#btnRight{grid-area:right}#btnDown{grid-area:down}#btnBack{grid-area:back}
+/* Side-panel default: navigation buttons are one vertical column. */
+.move-pad{display:grid;grid-template-columns:1fr;gap:6px}
 .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .settings{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .field-control{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
@@ -226,7 +232,8 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   #uiToggle{left:calc(8px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top));min-width:52px;min-height:42px;padding:0 12px;border-radius:11px;font-size:12px;opacity:.9;box-shadow:0 8px 20px rgba(0,0,0,.28)}
   #panel{max-height:min(44dvh,360px);overflow:auto;padding:9px max(9px,env(safe-area-inset-right)) max(9px,env(safe-area-inset-bottom)) max(9px,env(safe-area-inset-left));border-left:0;border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.25);gap:7px;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);align-items:stretch;align-content:stretch}
   body.ui-hidden{grid-template-rows:minmax(0,1fr) 0}
-  .move-pad{grid-row:span 3;grid-template-rows:repeat(3,minmax(42px,1fr));height:100%}
+  /* Bottom-panel portrait layout: keep all six navigation buttons in one row. */
+  .move-pad{grid-column:1 / -1;grid-row:auto;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:minmax(42px,auto);height:auto}
   .actions,.settings,.field-control{grid-template-columns:1fr;gap:6px}
   button{min-height:42px;border-radius:10px;font-size:12px;padding:0 6px}
   label{min-height:38px;font-size:11px;padding:0 8px}
@@ -235,7 +242,7 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
 }
 @media(orientation:portrait) and (max-width:480px){
   #panel{max-height:min(42dvh,330px);grid-template-columns:1fr 1fr;gap:6px;padding:7px max(7px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(7px,env(safe-area-inset-left))}
-  .move-pad{grid-template-rows:repeat(3,38px)}
+  .move-pad{grid-template-rows:38px}
   button{min-height:38px;font-size:11px;padding:0 4px}
   label{min-height:34px;font-size:10px}
   input[type=number]{min-height:34px;font-size:15px}
@@ -243,7 +250,7 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
 }
 @media(orientation:portrait) and (max-width:360px){
   #panel{max-height:40dvh}
-  .move-pad{grid-template-rows:repeat(3,34px)}
+  .move-pad{grid-template-rows:34px}
   button{min-height:34px;font-size:10px}
 }
 @media(orientation:landscape){
@@ -264,7 +271,7 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
 <!--
   UI structure:
   - #uiToggle hides/shows the full control panel on small screens.
-  - #panel contains movement buttons, path/field toggles, field size, and compact state readout.
+  - #panel contains movement buttons, path/field controls, field size, and compact state readout.
   - #sceneFrame receives the Three.js canvas inserted by JavaScript below.
 -->
 <div id="sceneFrame" aria-label="Трёхмерное поле"></div>
@@ -349,7 +356,7 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
         1. validates bounds,
         2. derives A, B, enter, out,
         3. animates the four common-neighbor spinners,
-        4. fades entering/outgoing cubes,
+        4. animates the returning external cube when needed and keeps the outgoing cube semi-transparent,
         5. stores final orientations,
         6. applies the next state.
 */
@@ -1128,6 +1135,7 @@ function applyStateVisual(s){
 }
 
 function moveLetter(axisIndex, sign){
+  // History letters follow the user-facing movement directions, not cell IDs.
   if(axisIndex === 0) return sign > 0 ? "r" : "l";
   if(axisIndex === 1) return sign > 0 ? "u" : "d";
   if(axisIndex === 2) return sign > 0 ? "f" : "b";
@@ -1265,7 +1273,8 @@ function commonSpinners(s, axisIndex){
 
   It then:
       - animates the four common-neighbor cells around their edge pivots;
-      - fades enter/out cells;
+      - moves the returning external cell along a high clearance arc when needed;
+      - keeps the outgoing external cell visible and semi-transparent;
       - transfers active edge brightness from A to B;
       - records pendingNormals[out];
       - calls recenterPhase() to commit the logical state.
@@ -1549,8 +1558,8 @@ function applyFieldSize(){
 /*
   updateInfo()
 
-  Compact status panel. It intentionally avoids long explanations so the mobile
-  UI remains usable.
+  Compact status panel. It shows only the active field coordinate and the
+  moveHistory string as r/l/f/b/u/d letters without separators.
 */
 function updateInfo(move=null){
   const el = document.getElementById("info");
