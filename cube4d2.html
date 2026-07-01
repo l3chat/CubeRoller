@@ -359,6 +359,8 @@ const spacing = 1.0;
 const h = 0.5;
 // Angular step per animation frame. Lower value = slower/smoother rolling.
 const rollStep = 0.045;
+const externalBodyOpacity = 0.42;
+const externalEdgeOpacity = 0.38;
 
 const colors = {
   0:0xd8e1ea, 1:0xd8e1ea, 2:0xd8e1ea, 3:0xd8e1ea,
@@ -1061,8 +1063,8 @@ function applyStateVisual(s){
 
     g.visible = true;
 
-    setCubeOpacity(g, 1.0);
-    g.userData.baseEdgeOpacity = isActive ? 1.00 : isExternal ? 0.50 : 0.65;
+    setCubeOpacity(g, isExternal ? externalBodyOpacity : 1.0);
+    g.userData.baseEdgeOpacity = isActive ? 1.00 : isExternal ? externalEdgeOpacity : 0.65;
     g.userData.baseEdgeColor = isActive ? 0xffffff : isExternal ? 0x7aa9d8 : 0xaebdca;
     ed.material.color.set(g.userData.baseEdgeColor);
     ed.material.opacity = g.userData.baseEdgeOpacity;
@@ -1283,7 +1285,6 @@ function runMove(axisIndex, sign){
   const outEdges = outGroup.getObjectByName("edges");
   const outLabel = outGroup.getObjectByName("label");
   const outStartPosition = currentPositionFor(out, state);
-  const outStartOpacity = outEdges.material.opacity;
   outLabel.visible = false;
   outLabel.material.opacity = 0.0;
   setLabel(out, "выходит");
@@ -1344,8 +1345,8 @@ function runMove(axisIndex, sign){
     enterEdges.material.opacity = 0.75;
     setCubeOpacity(enterGroup, 1.0);
     enterLabel.material.opacity = 0.0;
-    outEdges.material.opacity = Math.max(0.50, outStartOpacity);
-    setCubeOpacity(outGroup, 1.0);
+    outEdges.material.opacity = externalEdgeOpacity;
+    setCubeOpacity(outGroup, externalBodyOpacity);
     outLabel.material.opacity = 0.0;
 
     const oldColor = new THREE.Color(0xffffff);

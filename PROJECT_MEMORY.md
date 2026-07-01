@@ -23,7 +23,7 @@ CubeRoller is a set of single-file Three.js demos: a 3D numbered cube roller and
 - `cube4d2.html` renders a local 3D unfolding of a tesseract: one active cubic cell, six visible neighbors, and one external opposite cell.
 - `cube4d2.html` initial local axes are oriented so cells 1, 2, and 3 begin on the camera-facing side without changing opposite pairs.
 - `cube4d2.html` uses persistent per-cell quaternions in `state.orientations` and stores external detach normals in `state.pendingNormals`.
-- `cube4d2.html` keeps the external cell visible by storing its outside position in `state.externalPositions`; returning external cells travel back into the unfolding along a high clearance arc while slerping to the required orientation, except direct back-through-same-face returns which snap into place.
+- `cube4d2.html` keeps the external cell visible and semi-transparent by storing its outside position in `state.externalPositions`; returning external cells travel back into the unfolding along a high clearance arc while slerping to the required orientation, except direct back-through-same-face returns which snap into place.
 - `cube4d2.html` uses the universal transition rule `A -> B`: `enter = opposite[A]`, `out = opposite[B]`, with the four common neighbors rotating on the unused axes.
 - `cube4d2.html` avoids negative scale for external cells by combining two conceptual reflections into one rotation in `rotationFromTwoReflections()`.
 - `cube4d2.html` has a responsive rebuilt control panel with static movement labels, path display disabled by default, and default field size 7.
