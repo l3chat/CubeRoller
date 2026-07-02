@@ -330,7 +330,7 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
       Sequence of active cell IDs visited.
 
     state.moveHistory
-      Compact sequence of move letters shown in the status panel: r/l/f/b/u/d.
+      Compact sequence of move letters shown in the status panel: R/L/F/B/U/D.
 
     state.fieldPath
       Sequence of 3D field coordinates visited.
@@ -460,14 +460,14 @@ function setCameraForViewport(){
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const fitFov = Math.max(0.01, Math.min(verticalFov, horizontalFov));
   const distance = fieldRadius / Math.sin(fitFov / 2) * 1.00;
-  const direction = new THREE.Vector3(-0.68, 0.28, 0.76).normalize();
+  const direction = new THREE.Vector3(-0.4, 0.28, 0.76).normalize();
 
   camera.fov = THREE.MathUtils.radToDeg(verticalFov);
   controls.target.set(0, 0, 0);
   camera.position.copy(direction.multiplyScalar(distance));
   camera.near = 0.05;
   camera.far = distance + fieldRadius * 3.5;
-  controls.minDistance = distance * 0.82;
+  controls.minDistance = distance * 0.4;
   controls.maxDistance = distance * 1.45;
   camera.updateProjectionMatrix();
   camera.lookAt(controls.target);
@@ -1136,9 +1136,9 @@ function applyStateVisual(s){
 
 function moveLetter(axisIndex, sign){
   // History letters follow the user-facing movement directions, not cell IDs.
-  if(axisIndex === 0) return sign > 0 ? "r" : "l";
-  if(axisIndex === 1) return sign > 0 ? "u" : "d";
-  if(axisIndex === 2) return sign > 0 ? "f" : "b";
+  if(axisIndex === 0) return sign > 0 ? "R" : "L";
+  if(axisIndex === 1) return sign > 0 ? "U" : "D";
+  if(axisIndex === 2) return sign > 0 ? "F" : "B";
   return "";
 }
 
@@ -1559,7 +1559,7 @@ function applyFieldSize(){
   updateInfo()
 
   Compact status panel. It shows only the active field coordinate and the
-  moveHistory string as r/l/f/b/u/d letters without separators.
+  moveHistory string as R/L/F/B/U/D letters without separators.
 */
 function updateInfo(move=null){
   const el = document.getElementById("info");
