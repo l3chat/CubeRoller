@@ -372,6 +372,7 @@ const h = 0.5;
 const rollStep = 0.045;
 const externalBodyOpacity = 0.71;
 const externalEdgeOpacity = 0.69;
+const flatFaceOpacity = 0.65;
 
 const colors = {
   0:0xd8e1ea, 1:0xd8e1ea, 2:0xd8e1ea, 3:0xd8e1ea,
@@ -1017,8 +1018,9 @@ function setCubeOpacity(group, opacity){
 
   const flatFace = group.getObjectByName("flatFace");
   if(flatFace){
-    flatFace.material.transparent = opacity < 0.999;
-    flatFace.material.opacity = opacity;
+    flatFace.material.transparent = true;
+    flatFace.material.opacity = opacity * flatFaceOpacity;
+    flatFace.material.depthWrite = false;
   }
 }
 
@@ -1091,9 +1093,9 @@ function createCell(id){
     new THREE.MeshBasicMaterial({
       map: frontNumberTexture,
       side: THREE.DoubleSide,
-      transparent: false,
-      opacity: 1.0,
-      depthWrite: true
+      transparent: true,
+      opacity: flatFaceOpacity,
+      depthWrite: false
     })
   );
   flatFace.name = "flatFace";
