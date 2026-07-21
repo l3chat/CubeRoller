@@ -1089,7 +1089,7 @@ function createCell(id){
   // Alternative flat representation. The plane is centered in the cell group and
   // shares the cube quaternion, so it preserves the orientation of the original +Z face.
   const flatFace = new THREE.Mesh(
-    new THREE.PlaneGeometry(1,1),
+    new THREE.PlaneGeometry(0.85,0.85),
     new THREE.MeshBasicMaterial({
       map: frontNumberTexture,
       side: THREE.DoubleSide,
