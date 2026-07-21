@@ -1,9 +1,9 @@
 name: Apply flat face view patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/flat-face-view
+      - main
     paths:
       - tools/patch_flat_face_view.py
       - .github/workflows/apply-flat-face-patch.yml
@@ -49,4 +49,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add cube4d2.html
           git diff --cached --quiet || git commit -m "Add switchable flat face view"
-          git push
+          git push origin HEAD:feature/flat-face-view
