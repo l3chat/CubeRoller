@@ -292,6 +292,7 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   </div>
   <div class="control-section settings">
     <label><span>Путь</span><input id="trailCheckbox" type="checkbox"></label>
+    <label><span>Плоский вид</span><input id="flatViewCheckbox" type="checkbox"></label>
     <label><span>Размер</span><input id="fieldSizeInput" type="number" min="3" max="9" step="2" value="7"></label>
   </div>
   <div class="control-section field-control">
@@ -406,6 +407,8 @@ let history = [];
 let busy = false;
 let edgesVisible = false;
 let trailVisible = false;
+// Alternative representation: hide cube bodies and edges, leaving only a numbered square at each cell center.
+let flatView = false;
 let fieldVisible = true;
 let projectionFaceSignature = "";
 
@@ -1004,11 +1007,35 @@ function makeMarkerTexture(kind, id){
 function setCubeOpacity(group, opacity){
   opacity = Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1;
   const body = group.getObjectByName("body");
-  if(!body) return;
-  const mats = Array.isArray(body.material) ? body.material : [body.material];
-  for(const m of mats){
-    m.transparent = opacity < 0.999;
-    m.opacity = opacity;
+  if(body){
+    const mats = Array.isArray(body.material) ? body.material : [body.material];
+    for(const m of mats){
+      m.transparent = opacity < 0.999;
+      m.opacity = opacity;
+    }
+  }
+
+  const flatFace = group.getObjectByName("flatFace");
+  if(flatFace){
+    flatFace.material.transparent = opacity < 0.999;
+    flatFace.material.opacity = opacity;
+  }
+}
+
+function applyCellRenderMode(group){
+  const body = group.getObjectByName("body");
+  const edges = group.getObjectByName("edges");
+  const flatFace = group.getObjectByName("flatFace");
+
+  if(body) body.visible = !flatView;
+  if(edges) edges.visible = !flatView;
+  if(flatFace) flatFace.visible = flatView;
+}
+
+function applyRenderMode(){
+  for(const id of allIds){
+    const group = cells.get(id);
+    if(group) applyCellRenderMode(group);
   }
 }
 
@@ -1056,6 +1083,22 @@ function createCell(id){
   const cube = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), bodyMat);
   cube.name = "body";
   g.add(cube);
+
+  // Alternative flat representation. The plane is centered in the cell group and
+  // shares the cube quaternion, so it preserves the orientation of the original +Z face.
+  const flatFace = new THREE.Mesh(
+    new THREE.PlaneGeometry(1,1),
+    new THREE.MeshBasicMaterial({
+      map: frontNumberTexture,
+      side: THREE.DoubleSide,
+      transparent: false,
+      opacity: 1.0,
+      depthWrite: true
+    })
+  );
+  flatFace.name = "flatFace";
+  flatFace.visible = false;
+  g.add(flatFace);
 
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),
@@ -1111,6 +1154,7 @@ function applyStateVisual(s){
     g.visible = true;
 
     setCubeOpacity(g, isExternal ? externalBodyOpacity : 1.0);
+    applyCellRenderMode(g);
     g.userData.baseEdgeOpacity = isActive ? 1.00 : isExternal ? externalEdgeOpacity : 0.65;
     g.userData.baseEdgeColor = isActive ? 0xffffff : isExternal ? 0x7aa9d8 : 0xaebdca;
     ed.material.color.set(g.userData.baseEdgeColor);
@@ -1596,6 +1640,11 @@ document.getElementById("applyFieldBtn").addEventListener("click", applyFieldSiz
 document.getElementById("trailCheckbox").addEventListener("change", e=>{
   trailVisible = e.target.checked;
   rebuildTrail();
+});
+
+document.getElementById("flatViewCheckbox").addEventListener("change", e=>{
+  flatView = e.target.checked;
+  applyRenderMode();
 });
 
 document.getElementById("toggleFieldBtn").addEventListener("click", ()=>{
