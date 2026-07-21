@@ -12,3 +12,5 @@ elif text.count(old) == 1:
     print("Reduced flat-face side length by 15%.")
 else:
     raise SystemExit(f"Expected exactly one flat-face geometry, found {text.count(old)}")
+
+# Workflow trigger marker.
