@@ -33,3 +33,5 @@ if changed:
     print("Applied flat-face transparency patch.")
 else:
     print("Flat-face transparency patch already applied.")
+
+# Touch this helper to trigger the registered branch workflow.
