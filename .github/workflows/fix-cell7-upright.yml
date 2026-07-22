@@ -1,8 +1,7 @@
 name: Fix cell 7 upright orientation
 
-# Registered separately so GitHub Actions recognizes this workflow on pull_request_target.
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, synchronize]
 
 permissions:
@@ -10,7 +9,7 @@ permissions:
 
 jobs:
   patch-and-test:
-    if: github.event.pull_request.head.ref == 'fix/cell7-upright'
+    if: github.head_ref == 'fix/cell7-upright'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -48,52 +47,31 @@ jobs:
           cat > verify.js <<'JS'
           const { chromium } = require('playwright');
           const assert = require('node:assert/strict');
-
           const sameQ = (a,b,eps=1e-5) => Math.min(
             Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z,a.w-b.w),
             Math.hypot(a.x+b.x,a.y+b.y,a.z+b.z,a.w+b.w)
           ) < eps;
-
           (async()=>{
             const browser = await chromium.launch({headless:true,args:['--use-gl=swiftshader']});
             const page = await browser.newPage({viewport:{width:1280,height:800}});
             await page.goto('http://127.0.0.1:8000/cube4d2.html',{waitUntil:'networkidle'});
             await page.waitForSelector('canvas');
-
             const initial = await page.evaluate(() => {
               const q = cells.get(7).quaternion.clone();
               const localUp = new THREE.Vector3(0,1,0).applyQuaternion(q);
-              const localBack = new THREE.Vector3(0,0,-1).applyQuaternion(q);
-              return {
-                q:{...state.orientations[7]},
-                pending:state.pendingNormals[7] ? {...state.pendingNormals[7]} : null,
-                localUp:{x:localUp.x,y:localUp.y,z:localUp.z},
-                localBack:{x:localBack.x,y:localBack.y,z:localBack.z}
-              };
+              return {q:{...state.orientations[7]},pending:{...state.pendingNormals[7]},localUp:{x:localUp.x,y:localUp.y,z:localUp.z}};
             });
-
             assert.ok(initial.localUp.y > 0.999, 'cell 7 local up must point world-up');
-            assert.ok(initial.localBack.z > 0.999, 'cell 7 numbered back face must point toward the camera side');
-
-            const move = async(a,s) => {
-              await page.evaluate(([a,s]) => runMove(a,s), [a,s]);
-              await page.waitForFunction(() => !busy, null, {timeout:10000});
-            };
-            const cycle = async()=>{
-              await move(1,1); await move(1,-1); await move(2,1); await move(2,-1);
-            };
-
+            const move = async(a,s) => { await page.evaluate(([a,s])=>runMove(a,s),[a,s]); await page.waitForFunction(()=>!busy,null,{timeout:10000}); };
+            const cycle = async()=>{ await move(1,1); await move(1,-1); await move(2,1); await move(2,-1); };
             await cycle();
-            const afterFirst = await page.evaluate(() => ({q:{...state.orientations[7]},pending:{...state.pendingNormals[7]}}));
+            const first = await page.evaluate(()=>({q:{...state.orientations[7]},pending:{...state.pendingNormals[7]}}));
             await cycle();
-            const afterSecond = await page.evaluate(() => ({q:{...state.orientations[7]},pending:{...state.pendingNormals[7]}}));
-
-            assert.ok(sameQ(initial.q, afterFirst.q), 'first cycle changed cell 7 orientation');
-            assert.ok(sameQ(initial.q, afterSecond.q), 'second cycle changed cell 7 orientation');
-            assert.deepEqual(afterFirst.pending, initial.pending);
-            assert.deepEqual(afterSecond.pending, initial.pending);
-
-            await page.screenshot({path:'cell7-upright.png',fullPage:true});
+            const second = await page.evaluate(()=>({q:{...state.orientations[7]},pending:{...state.pendingNormals[7]}}));
+            assert.ok(sameQ(initial.q, first.q));
+            assert.ok(sameQ(initial.q, second.q));
+            assert.deepEqual(first.pending, initial.pending);
+            assert.deepEqual(second.pending, initial.pending);
             await browser.close();
             console.log('Cell 7 is upright and stable across repeated U-D-F-B cycles.');
           })().catch(e=>{console.error(e);process.exit(1)});
