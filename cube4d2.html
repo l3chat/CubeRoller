@@ -1736,41 +1736,88 @@ document.getElementById("toggleFieldBtn").addEventListener("click", ()=>{
 
 const cameraOrbitStep = THREE.MathUtils.degToRad(4);
 const cameraZoomFactor = 0.9;
+const keyboardCameraSmoothing = 14;
+const keyboardCameraSnapEpsilon = 1e-4;
+let keyboardCameraTarget = null;
+let keyboardCameraAnimating = false;
+let keyboardCameraLastFrame = performance.now();
+
+function cameraSphericalFromPosition(){
+  return new THREE.Spherical().setFromVector3(
+    camera.position.clone().sub(controls.target)
+  );
+}
+
+function ensureKeyboardCameraTarget(){
+  if(!keyboardCameraTarget || !keyboardCameraAnimating){
+    keyboardCameraTarget = cameraSphericalFromPosition();
+  }
+  return keyboardCameraTarget;
+}
 
 function orbitCameraByKeyboard(deltaAzimuth, deltaPolar){
-  const offset = camera.position.clone().sub(controls.target);
-  const spherical = new THREE.Spherical().setFromVector3(offset);
-
-  spherical.theta += deltaAzimuth;
-  spherical.phi = THREE.MathUtils.clamp(
-    spherical.phi + deltaPolar,
+  const target = ensureKeyboardCameraTarget();
+  target.theta += deltaAzimuth;
+  target.phi = THREE.MathUtils.clamp(
+    target.phi + deltaPolar,
     0.05,
     Math.PI - 0.05
   );
-
-  camera.position.copy(controls.target).add(
-    new THREE.Vector3().setFromSpherical(spherical)
-  );
-  camera.lookAt(controls.target);
-  controls.update();
+  keyboardCameraAnimating = true;
 }
 
 function zoomCameraByKeyboard(factor){
-  const offset = camera.position.clone().sub(controls.target);
-  const currentDistance = offset.length();
-  const nextDistance = THREE.MathUtils.clamp(
-    currentDistance * factor,
+  const target = ensureKeyboardCameraTarget();
+  target.radius = THREE.MathUtils.clamp(
+    target.radius * factor,
     controls.minDistance,
     controls.maxDistance
   );
-
-  if(currentDistance > 0){
-    offset.setLength(nextDistance);
-    camera.position.copy(controls.target).add(offset);
-    camera.lookAt(controls.target);
-    controls.update();
-  }
+  keyboardCameraAnimating = true;
 }
+
+function shortestAngleDelta(from, to){
+  return THREE.MathUtils.euclideanModulo(to - from + Math.PI, Math.PI * 2) - Math.PI;
+}
+
+function cancelKeyboardCameraAnimation(){
+  keyboardCameraAnimating = false;
+  keyboardCameraTarget = null;
+}
+
+function updateKeyboardCameraAnimation(now){
+  const dt = THREE.MathUtils.clamp((now - keyboardCameraLastFrame) / 1000, 0, 0.05);
+  keyboardCameraLastFrame = now;
+  if(!keyboardCameraAnimating || !keyboardCameraTarget) return;
+
+  const current = cameraSphericalFromPosition();
+  const thetaDelta = shortestAngleDelta(current.theta, keyboardCameraTarget.theta);
+  const phiDelta = keyboardCameraTarget.phi - current.phi;
+  const radiusDelta = keyboardCameraTarget.radius - current.radius;
+  const alpha = 1 - Math.exp(-keyboardCameraSmoothing * dt);
+
+  current.theta += thetaDelta * alpha;
+  current.phi += phiDelta * alpha;
+  current.radius += radiusDelta * alpha;
+
+  const finished = Math.abs(thetaDelta) < keyboardCameraSnapEpsilon &&
+    Math.abs(phiDelta) < keyboardCameraSnapEpsilon &&
+    Math.abs(radiusDelta) < keyboardCameraSnapEpsilon;
+
+  if(finished){
+    current.copy(keyboardCameraTarget);
+    cancelKeyboardCameraAnimation();
+  }
+
+  camera.position.copy(controls.target).add(
+    new THREE.Vector3().setFromSpherical(current)
+  );
+  camera.lookAt(controls.target);
+}
+
+// A mouse or touch gesture takes priority and immediately cancels a pending
+// keyboard transition, so the camera never pulls back toward an old target.
+controls.addEventListener("start", cancelKeyboardCameraAnimation);
 
 function isKeyboardInputTarget(target){
   if(!(target instanceof Element)) return false;
@@ -1844,8 +1891,9 @@ window.addEventListener("orientationchange", layoutScene);
 /*
   Main render loop.
 */
-function loop(){
+function loop(now=performance.now()){
   requestAnimationFrame(loop);
+  updateKeyboardCameraAnimation(now);
   controls.update();
   if(fieldVisible && currentProjectionFaceSignature() !== projectionFaceSignature){
     rebuildProjections();
