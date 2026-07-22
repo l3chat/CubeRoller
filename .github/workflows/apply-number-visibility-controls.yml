@@ -1,0 +1,41 @@
+name: Apply number visibility controls
+
+on:
+  push:
+    branches:
+      - feature/number-visibility-controls
+    paths:
+      - tools/patch_number_visibility_controls.py
+      - .github/workflows/apply-number-visibility-controls.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/number-visibility-controls
+      - run: python tools/patch_number_visibility_controls.py
+      - name: Validate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('cube4d2.html').read_text(encoding='utf-8')
+          assert text.count('data-number-limit=') == 8
+          assert 'function setNumberVisibilityLimit(limit)' in text
+          assert '/^[0-7]$/.test(e.key)' in text
+          start = text.rfind('<script>') + len('<script>')
+          end = text.rfind('</script>')
+          Path('/tmp/cube4d2-inline.js').write_text(text[start:end], encoding='utf-8')
+          PY
+          node --check /tmp/cube4d2-inline.js
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cube4d2.html
+          git diff --cached --quiet || git commit -m "Add cube number visibility controls"
+          git push
