@@ -1,5 +1,6 @@
 name: Fix cell 7 upright orientation
 
+# Registered separately so GitHub Actions recognizes this workflow on pull_request_target.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
