@@ -1,0 +1,118 @@
+name: Apply smooth keyboard camera
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/cell7-camera-ui-toggle-v2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply smooth camera patch
+        run: python tools/add_smooth_keyboard_camera.py
+
+      - name: Validate JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('cube4d2.html').read_text(encoding='utf-8')
+          assert 'function updateKeyboardCameraAnimation(now)' in text
+          assert 'controls.addEventListener("start", cancelKeyboardCameraAnimation)' in text
+          assert 'updateKeyboardCameraAnimation(now);' in text
+          start = text.rfind('<script>') + len('<script>')
+          end = text.rfind('</script>')
+          Path('/tmp/cube4d2-inline.js').write_text(text[start:end], encoding='utf-8')
+          PY
+          node --check /tmp/cube4d2-inline.js
+
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start local server
+        run: python3 -m http.server 8000 --bind 127.0.0.1 > /tmp/cuberoller-http.log 2>&1 &
+
+      - name: Verify smooth keyboard camera
+        run: |
+          cat > verify-smooth-camera.js <<'JS'
+          const { chromium } = require('playwright');
+          const assert = require('node:assert/strict');
+
+          (async()=>{
+            const browser = await chromium.launch({headless:true,args:['--use-gl=swiftshader']});
+            const page = await browser.newPage({viewport:{width:1280,height:800}});
+            const errors=[];
+            page.on('pageerror',e=>errors.push(String(e)));
+            await page.goto('http://127.0.0.1:8000/cube4d2.html',{waitUntil:'networkidle'});
+            await page.waitForSelector('canvas');
+
+            const pos = () => page.evaluate(() => camera.position.toArray());
+            const distance = (a,b) => Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+
+            const before = await pos();
+            await page.keyboard.down('Control');
+            await page.keyboard.press('ArrowLeft');
+            await page.keyboard.up('Control');
+            const immediate = await pos();
+            await page.waitForTimeout(60);
+            const middle = await pos();
+            await page.waitForTimeout(700);
+            const final = await pos();
+
+            assert.ok(distance(before, immediate) < distance(before, final) * 0.55, 'camera jumped too far on the first frame');
+            assert.ok(distance(before, middle) > distance(before, immediate), 'camera did not continue moving after keyup');
+            assert.ok(distance(before, final) > distance(before, middle), 'camera did not ease toward the target');
+
+            const beforeZoom = await pos();
+            await page.keyboard.down('Control');
+            await page.keyboard.press('PageUp');
+            await page.keyboard.up('Control');
+            await page.waitForTimeout(700);
+            const afterZoom = await pos();
+            const radiusBefore = Math.hypot(...beforeZoom);
+            const radiusAfter = Math.hypot(...afterZoom);
+            assert.ok(radiusAfter < radiusBefore, 'Ctrl+PageUp did not zoom in');
+
+            await page.keyboard.down('Control');
+            await page.keyboard.press('ArrowRight');
+            await page.keyboard.up('Control');
+            await page.waitForTimeout(30);
+            await page.locator('canvas').dispatchEvent('pointerdown',{pointerId:1,pointerType:'mouse',clientX:300,clientY:300,button:0,bubbles:true});
+            assert.equal(await page.evaluate(()=>keyboardCameraAnimating),false,'pointer input did not cancel keyboard animation');
+
+            assert.deepEqual(errors,[]);
+            await page.screenshot({path:'smooth-keyboard-camera.png',fullPage:true});
+            await browser.close();
+            console.log('Smooth keyboard camera tests passed.');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          node verify-smooth-camera.js | tee smooth-camera-test.log
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smooth-keyboard-camera-evidence
+          path: |
+            smooth-camera-test.log
+            smooth-keyboard-camera.png
+          if-no-files-found: ignore
+
+      - name: Commit verified result
+        run: |
+          rm -rf node_modules package.json package-lock.json verify-smooth-camera.js smooth-camera-test.log smooth-keyboard-camera.png tools/add_smooth_keyboard_camera.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Smooth keyboard camera movement"
+          git push origin HEAD:fix/cell7-camera-ui-toggle-v2
