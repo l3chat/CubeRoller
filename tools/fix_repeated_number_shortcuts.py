@@ -28,3 +28,4 @@ for old, new in replacements:
 
 path.write_text(text, encoding="utf-8")
 print("Fixed repeated number shortcuts and button-focus blocking.")
+# Trigger workflow after registration.
