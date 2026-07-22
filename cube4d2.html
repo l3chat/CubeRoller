@@ -1753,12 +1753,13 @@ function zoomCameraByKeyboard(factor){
 
 function isKeyboardInputTarget(target){
   if(!(target instanceof Element)) return false;
-  return Boolean(target.closest('input, textarea, select, button, [contenteditable="true"]'));
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
 }
 
 function numberLimitFromKeyboardEvent(e){
-  const match = /^(?:Digit|Numpad)([0-7])$/.exec(e.code);
-  return match ? Number(match[1]) : null;
+  const codeMatch = /^(?:Digit|Numpad)([0-7])$/.exec(e.code || "");
+  if(codeMatch) return Number(codeMatch[1]);
+  return /^[0-7]$/.test(e.key) ? Number(e.key) : null;
 }
 
 window.addEventListener("keydown", e=>{
@@ -1786,7 +1787,7 @@ window.addEventListener("keydown", e=>{
   if(!e.ctrlKey && !e.altKey && !e.metaKey){
     const numberLimit = numberLimitFromKeyboardEvent(e);
     if(numberLimit !== null){
-      if(!e.repeat) setNumberVisibilityLimit(numberLimit);
+      setNumberVisibilityLimit(numberLimit);
       e.preventDefault();
       return;
     }
