@@ -39,3 +39,5 @@ jobs:
           git add cube4d2.html
           git diff --cached --quiet || git commit -m "Add cube number visibility controls"
           git push
+
+# Registered on main; this edit triggers the branch workflow.
