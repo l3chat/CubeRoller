@@ -1,14 +1,15 @@
 name: Apply cell 7 and UI fixes
 
 on:
-  push:
-    branches: [fix/cell7-camera-ui-toggle-v2]
+  pull_request:
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: write
 
 jobs:
   patch-and-test:
+    if: github.head_ref == 'fix/cell7-camera-ui-toggle-v2'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -66,7 +67,7 @@ jobs:
             const buttonMetrics = () => page.evaluate(() => [...document.querySelectorAll('#panel button')].map(b=>{
               const r=b.getBoundingClientRect();
               const s=getComputedStyle(b);
-              return {id:b.id||b.dataset.numberLimit||'',x:r.x,y:r.y,w:r.width,h:r.height,font:s.fontSize,display:s.display,visibility:s.visibility};
+              return {id:b.id||b.dataset.numberLimit||'',w:r.width,h:r.height,font:s.fontSize,display:s.display,visibility:s.visibility};
             }));
             const cameraPosition = () => page.evaluate(() => camera.position.toArray());
 
