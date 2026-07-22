@@ -1780,8 +1780,8 @@ window.addEventListener("keydown", e=>{
     let handled = true;
     if(e.key === "ArrowLeft") orbitCameraByKeyboard(cameraOrbitStep, 0);
     else if(e.key === "ArrowRight") orbitCameraByKeyboard(-cameraOrbitStep, 0);
-    else if(e.key === "ArrowUp") orbitCameraByKeyboard(0, -cameraOrbitStep);
-    else if(e.key === "ArrowDown") orbitCameraByKeyboard(0, cameraOrbitStep);
+    else if(e.key === "ArrowUp") orbitCameraByKeyboard(0, cameraOrbitStep);
+    else if(e.key === "ArrowDown") orbitCameraByKeyboard(0, -cameraOrbitStep);
     else if(e.key === "PageUp") zoomCameraByKeyboard(cameraZoomFactor);
     else if(e.key === "PageDown") zoomCameraByKeyboard(1 / cameraZoomFactor);
     else handled = false;
