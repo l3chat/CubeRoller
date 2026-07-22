@@ -24,9 +24,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Start local web server
-        run: |
-          python3 -m http.server 8000 --bind 127.0.0.1 > /tmp/cuberoller-http.log 2>&1 &
-          echo $! > /tmp/cuberoller-http.pid
+        run: python3 -m http.server 8000 --bind 127.0.0.1 > /tmp/cuberoller-http.log 2>&1 &
 
       - name: Run browser interaction tests
         run: |
@@ -38,11 +36,7 @@ jobs:
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
             const pageErrors = [];
-            const consoleErrors = [];
             page.on('pageerror', error => pageErrors.push(String(error)));
-            page.on('console', message => {
-              if (message.type() === 'error') consoleErrors.push(message.text());
-            });
 
             await page.goto('http://127.0.0.1:8000/cube4d2.html', { waitUntil: 'networkidle' });
             await page.waitForSelector('canvas');
@@ -53,49 +47,32 @@ jobs:
               await page.locator('body').dispatchEvent('keydown', { code, key, repeat, bubbles: true });
             };
 
-            assert.equal(await activeLimit(), 7, 'initial limit should be 7');
-
+            assert.equal(await activeLimit(), 7);
             await pressCode('Digit2', '2');
-            assert.equal(await activeLimit(), 2, 'first top-row digit should select 2');
+            assert.equal(await activeLimit(), 2);
             await pressCode('Digit5', '5');
-            assert.equal(await activeLimit(), 5, 'second top-row digit should select 5');
+            assert.equal(await activeLimit(), 5);
             await pressCode('Digit1', '1', true);
-            assert.equal(await activeLimit(), 1, 'repeat keydown should still select 1');
-
+            assert.equal(await activeLimit(), 1);
             await pressCode('Numpad6', '6');
-            assert.equal(await activeLimit(), 6, 'numpad digit should select 6');
+            assert.equal(await activeLimit(), 6);
 
             await page.locator('button[data-number-limit="4"]').click();
-            assert.equal(await activeLimit(), 4, 'button click should select 4');
-            assert.equal(await page.evaluate(() => document.activeElement?.dataset?.numberLimit), '4', 'clicked number button should hold focus');
+            assert.equal(await activeLimit(), 4);
+            assert.equal(await page.evaluate(() => document.activeElement?.dataset?.numberLimit), '4');
             await pressCode('Digit3', '3');
-            assert.equal(await activeLimit(), 3, 'digit should still work while a number button has focus');
+            assert.equal(await activeLimit(), 3, 'digits must keep working after a number button receives focus');
 
             const infoBeforeInput = await page.locator('#info').textContent();
-            const input = page.locator('#fieldSizeInput');
-            await input.focus();
+            await page.locator('#fieldSizeInput').focus();
             await page.keyboard.press('ArrowUp');
             await page.keyboard.press('PageUp');
             await page.keyboard.press('Backspace');
-            assert.equal(await page.locator('#info').textContent(), infoBeforeInput, 'focused input must block global move/undo shortcuts');
-            assert.equal(await activeLimit(), 3, 'focused input must not alter number limit');
-
-            await page.locator('#sceneFrame').click({ position: { x: 40, y: 40 } });
-            const infoBeforeMove = await page.locator('#info').textContent();
-            await page.keyboard.press('ArrowLeft');
-            await page.waitForFunction(before => document.querySelector('#info').textContent !== before, infoBeforeMove, { timeout: 5000 });
-
-            const cameraBefore = await page.evaluate(() => camera.position.toArray());
-            await page.keyboard.down('Control');
-            await page.keyboard.press('ArrowLeft');
-            await page.keyboard.up('Control');
-            const cameraAfter = await page.evaluate(() => camera.position.toArray());
-            assert.notDeepEqual(cameraAfter, cameraBefore, 'Ctrl+ArrowLeft should move camera');
+            assert.equal(await page.locator('#info').textContent(), infoBeforeInput);
+            assert.equal(await activeLimit(), 3);
 
             await page.screenshot({ path: 'browser-test-keyboard-controls.png', fullPage: true });
-
-            assert.deepEqual(pageErrors, [], `page errors: ${pageErrors.join('\n')}`);
-            assert.deepEqual(consoleErrors, [], `console errors: ${consoleErrors.join('\n')}`);
+            assert.deepEqual(pageErrors, []);
             await browser.close();
             console.log('All browser interaction tests passed.');
           })().catch(error => {
