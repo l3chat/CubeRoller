@@ -1,6 +1,7 @@
 name: Issue-triggered cell 7 and UI fix
 
 on:
+  workflow_dispatch:
   issues:
     types: [opened]
 
@@ -10,7 +11,7 @@ permissions:
 
 jobs:
   patch-and-test:
-    if: github.event.issue.title == '[automation] Apply cell7 and UI fixes'
+    if: github.event_name == 'workflow_dispatch' || github.event.issue.title == '[automation] Apply cell7 and UI fixes'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
