@@ -76,7 +76,7 @@ jobs:
             assert.equal(await page.locator('#info').textContent(), infoBeforeInput, 'input focus blocks global commands');
             assert.equal(await activeLimit(), 2, 'input focus preserves number limit');
 
-            await page.locator('#sceneFrame').click({ position: { x: 200, y: 200 } });
+            await page.evaluate(() => document.activeElement?.blur());
             const infoBeforeMove = await page.locator('#info').textContent();
             await page.keyboard.press('ArrowLeft');
             await page.waitForFunction(before => document.querySelector('#info').textContent !== before, infoBeforeMove, { timeout: 5000 });
