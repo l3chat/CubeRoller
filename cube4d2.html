@@ -216,6 +216,9 @@ body.ui-hidden{grid-template-columns:minmax(0,1fr) 0}
 /* Side-panel default: navigation buttons are one vertical column. */
 .move-pad{display:grid;grid-template-columns:1fr;gap:6px}
 .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.number-pad{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+.number-pad button{min-width:0;min-height:32px;padding:0;font-size:12px;background:#334155}
+.number-pad button.active{background:var(--gold);box-shadow:0 0 0 2px rgba(255,255,255,.16) inset}
 .settings{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .field-control{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
 button{min-height:40px;border:0;border-radius:8px;background:var(--accent);color:white;font-weight:800;cursor:pointer;font-size:13px;line-height:1.05;padding:0 10px}
@@ -235,6 +238,8 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
   /* Bottom-panel portrait layout: keep all six navigation buttons in one row. */
   .move-pad{grid-column:1 / -1;grid-row:auto;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:minmax(42px,auto);height:auto}
   .actions,.settings,.field-control{grid-template-columns:1fr;gap:6px}
+  .number-pad{grid-column:1 / -1}
+  .number-pad button{min-height:34px;font-size:11px}
   button{min-height:42px;border-radius:10px;font-size:12px;padding:0 6px}
   label{min-height:38px;font-size:11px;padding:0 8px}
   input[type=number]{width:100%;min-height:38px}
@@ -289,6 +294,16 @@ input[type=number]{width:68px;min-height:34px;border:1px solid rgba(151,190,235,
     <button id="undoBtn" class="green">Отмена</button>
     <button id="resetBtn" class="secondary">Сброс</button>
     <button id="toggleFieldBtn" class="secondary">Поле</button>
+  </div>
+  <div class="control-section number-pad" aria-label="Показывать номера кубиков до выбранного числа">
+    <button type="button" data-number-limit="0" aria-pressed="false">0</button>
+    <button type="button" data-number-limit="1" aria-pressed="false">1</button>
+    <button type="button" data-number-limit="2" aria-pressed="false">2</button>
+    <button type="button" data-number-limit="3" aria-pressed="false">3</button>
+    <button type="button" data-number-limit="4" aria-pressed="false">4</button>
+    <button type="button" data-number-limit="5" aria-pressed="false">5</button>
+    <button type="button" data-number-limit="6" aria-pressed="false">6</button>
+    <button type="button" data-number-limit="7" class="active" aria-pressed="true">7</button>
   </div>
   <div class="control-section settings">
     <label><span>Путь</span><input id="trailCheckbox" type="checkbox"></label>
@@ -410,6 +425,7 @@ let edgesVisible = false;
 let trailVisible = false;
 // Alternative representation: hide cube bodies and edges, leaving only a numbered square at each cell center.
 let flatView = false;
+let numberVisibilityLimit = 7;
 let fieldVisible = true;
 let projectionFaceSignature = "";
 
@@ -1041,6 +1057,38 @@ function applyRenderMode(){
   }
 }
 
+function applyNumberVisibilityToCell(group){
+  const id = group.userData.id;
+  const textures = group.userData.numberTextures;
+  if(!textures) return;
+  const showNumber = id <= numberVisibilityLimit;
+  const body = group.getObjectByName("body");
+  if(body && Array.isArray(body.material)){
+    body.material[4].map = showNumber ? textures.front : textures.blank;
+    body.material[5].map = showNumber ? textures.back : textures.blank;
+    body.material[4].needsUpdate = true;
+    body.material[5].needsUpdate = true;
+  }
+  const flatFace = group.getObjectByName("flatFace");
+  if(flatFace){
+    flatFace.material.map = showNumber ? textures.front : textures.blank;
+    flatFace.material.needsUpdate = true;
+  }
+}
+
+function setNumberVisibilityLimit(limit){
+  numberVisibilityLimit = THREE.MathUtils.clamp(Math.round(limit), 0, 7);
+  for(const id of allIds){
+    const group = cells.get(id);
+    if(group) applyNumberVisibilityToCell(group);
+  }
+  document.querySelectorAll("button[data-number-limit]").forEach(button=>{
+    const active = Number(button.dataset.numberLimit) === numberVisibilityLimit;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
 function setLabel(id,line){
   return;
 }
@@ -1071,6 +1119,7 @@ function createCell(id){
   const backNumberTexture = makeFaceTexture(id, true);
   const topTexture = makeMarkerTexture("center", id);
   const bottomTexture = makeMarkerTexture("blank", id);
+  g.userData.numberTextures = {front:frontNumberTexture, back:backNumberTexture, blank:bottomTexture};
   const rightTexture = makeMarkerTexture("topLeft", id);
   const leftTexture = makeMarkerTexture("topRight", id);
   const bodyMat = [
@@ -1125,6 +1174,7 @@ function createCell(id){
 }
 
 for(const id of allIds) createCell(id);
+setNumberVisibilityLimit(numberVisibilityLimit);
 
 /*
   applyStateVisual(state)
@@ -1625,6 +1675,7 @@ function updateInfo(move=null){
       ArrowUp / ArrowDown   = local Z
       Ctrl + Arrow keys     = orbit camera around controls.target
       Ctrl + PageUp/Down    = zoom camera in/out
+      0 ... 7               = show cell numbers from 0 through that value
 */
 document.getElementById("uiToggle").addEventListener("click", ()=>{
   document.body.classList.toggle("ui-hidden");
@@ -1635,6 +1686,10 @@ document.querySelectorAll("button[data-axis]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     runMove(parseInt(btn.dataset.axis,10), parseInt(btn.dataset.sign,10));
   });
+});
+
+document.querySelectorAll("button[data-number-limit]").forEach(button=>{
+  button.addEventListener("click", ()=>setNumberVisibilityLimit(Number(button.dataset.numberLimit)));
 });
 
 document.getElementById("undoBtn").addEventListener("click", undo);
@@ -1711,6 +1766,14 @@ window.addEventListener("keydown", e=>{
       e.preventDefault();
       return;
     }
+  }
+
+  const targetTag = e.target?.tagName || "";
+  const typingInControl = targetTag === "INPUT" || targetTag === "TEXTAREA" || targetTag === "SELECT";
+  if(!typingInControl && !e.ctrlKey && !e.altKey && !e.metaKey && /^[0-7]$/.test(e.key)){
+    if(!e.repeat) setNumberVisibilityLimit(Number(e.key));
+    e.preventDefault();
+    return;
   }
 
   if(e.repeat) return;
