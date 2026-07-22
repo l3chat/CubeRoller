@@ -1,0 +1,40 @@
+name: Apply repeated number shortcut fix
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'fix/keyboard-input-guard'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/keyboard-input-guard
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: python tools/fix_repeated_number_shortcuts.py
+      - name: Validate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('cube4d2.html').read_text(encoding='utf-8')
+          assert "closest('input, textarea, select, [contenteditable=\"true\"]')" in text
+          assert 'if(codeMatch) return Number(codeMatch[1]);' in text
+          assert 'if(!e.repeat) setNumberVisibilityLimit' not in text
+          start = text.rfind('<script>') + len('<script>')
+          end = text.rfind('</script>')
+          Path('/tmp/cube4d2-inline.js').write_text(text[start:end], encoding='utf-8')
+          PY
+          node --check /tmp/cube4d2-inline.js
+      - name: Commit
+        run: |
+          rm -f tools/fix_repeated_number_shortcuts.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Allow repeated number visibility shortcuts"
+          git push origin HEAD:fix/keyboard-input-guard
