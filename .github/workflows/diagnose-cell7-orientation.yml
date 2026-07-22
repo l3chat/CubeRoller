@@ -1,0 +1,71 @@
+name: Diagnose cell 7 orientation
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'fix/initial-cell7-orientation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/initial-cell7-orientation
+
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start local server
+        run: python3 -m http.server 8000 --bind 127.0.0.1 > /tmp/cuberoller-http.log 2>&1 &
+
+      - name: Diagnose orientation
+        run: |
+          cat > diagnose.js <<'JS'
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true, args: ['--use-gl=swiftshader'] });
+            const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+            await page.goto('http://127.0.0.1:8000/cube4d2.html', { waitUntil: 'networkidle' });
+            await page.waitForSelector('canvas');
+
+            const q7 = () => page.evaluate(() => ({...state.orientations[7]}));
+            const pending7 = () => page.evaluate(() => state.pendingNormals[7] ? {...state.pendingNormals[7]} : null);
+            const move = async (axis, sign) => {
+              await page.evaluate(([axis, sign]) => runMove(axis, sign), [axis, sign]);
+              await page.waitForFunction(() => !busy, null, { timeout: 10000 });
+            };
+            const cycle = async () => {
+              await move(1, 1);  // up
+              await move(1, -1); // down
+              await move(2, 1);  // forward
+              await move(2, -1); // back
+            };
+
+            console.log('Q0', JSON.stringify(await q7()));
+            console.log('P0', JSON.stringify(await pending7()));
+            await cycle();
+            console.log('Q1', JSON.stringify(await q7()));
+            console.log('P1', JSON.stringify(await pending7()));
+            await cycle();
+            console.log('Q2', JSON.stringify(await q7()));
+            console.log('P2', JSON.stringify(await pending7()));
+
+            await browser.close();
+          })().catch(error => { console.error(error); process.exit(1); });
+          JS
+          node diagnose.js | tee cell7-orientation.log
+
+      - name: Upload diagnostic log
+        uses: actions/upload-artifact@v4
+        with:
+          name: cell7-orientation-diagnostic
+          path: cell7-orientation.log
