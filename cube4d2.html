@@ -210,7 +210,7 @@ body{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minma
 #sceneFrame canvas{width:100%;height:100%;display:block;touch-action:none}
 #panel{z-index:5;min-width:0;min-height:0;max-height:100dvh;overflow:auto;padding:12px max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) 12px;background:var(--panel);border-left:1px solid var(--line);box-shadow:-4px 0 16px rgba(0,0,0,.25);display:grid;grid-template-columns:1fr;align-content:center;gap:10px;backdrop-filter:blur(10px)}
 #uiToggle{position:absolute;left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));z-index:6;width:auto;min-width:46px;min-height:36px;padding:0 12px;border:0;border-radius:9px;background:#334155;color:white;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.28)}
-body.ui-hidden #panel{display:none}
+body.ui-hidden #panel{visibility:hidden;opacity:0;pointer-events:none;overflow:hidden;padding:0;border:0;box-shadow:none;backdrop-filter:none}
 body.ui-hidden{grid-template-columns:minmax(0,1fr) 0}
 .control-section{display:grid;gap:6px}
 /* Side-panel default: navigation buttons are one vertical column. */
@@ -670,10 +670,9 @@ function cloneState(s){
       external opposite = 7
 */
 function initialState(){
+  // Cell 7 initially faces the same way as every other cube. Only its
+  // external-transition metadata differs from the ordinary visible cells.
   const orientations = identityOrientations();
-  // Cell 7 starts external. Its stable physical orientation is the one reached
-  // after the first closed U-D-F-B cycle: 180 degrees around local/world X.
-  orientations[7] = {x:1,y:0,z:0,w:0};
 
   const pendingNormals = identityPendingNormals();
   // The initial external placement is behind the forward neighbor. Treat it as
@@ -1688,9 +1687,18 @@ function updateInfo(move=null){
       Ctrl + PageUp/Down    = zoom camera in/out
       0 ... 7               = show cell numbers from 0 through that value
 */
-document.getElementById("uiToggle").addEventListener("click", ()=>{
+document.getElementById("uiToggle").addEventListener("click", e=>{
   document.body.classList.toggle("ui-hidden");
-  requestAnimationFrame(layoutScene);
+  e.currentTarget.blur();
+
+  // Preserve the user's camera position. Only resize the renderer after the CSS
+  // grid has completed both the hide and show layout passes.
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      resizeRendererToFrame();
+      controls.update();
+    });
+  });
 });
 
 document.querySelectorAll("button[data-axis]").forEach(btn=>{
@@ -1728,41 +1736,88 @@ document.getElementById("toggleFieldBtn").addEventListener("click", ()=>{
 
 const cameraOrbitStep = THREE.MathUtils.degToRad(4);
 const cameraZoomFactor = 0.9;
+const keyboardCameraSmoothing = 14;
+const keyboardCameraSnapEpsilon = 1e-4;
+let keyboardCameraTarget = null;
+let keyboardCameraAnimating = false;
+let keyboardCameraLastFrame = performance.now();
+
+function cameraSphericalFromPosition(){
+  return new THREE.Spherical().setFromVector3(
+    camera.position.clone().sub(controls.target)
+  );
+}
+
+function ensureKeyboardCameraTarget(){
+  if(!keyboardCameraTarget || !keyboardCameraAnimating){
+    keyboardCameraTarget = cameraSphericalFromPosition();
+  }
+  return keyboardCameraTarget;
+}
 
 function orbitCameraByKeyboard(deltaAzimuth, deltaPolar){
-  const offset = camera.position.clone().sub(controls.target);
-  const spherical = new THREE.Spherical().setFromVector3(offset);
-
-  spherical.theta += deltaAzimuth;
-  spherical.phi = THREE.MathUtils.clamp(
-    spherical.phi + deltaPolar,
+  const target = ensureKeyboardCameraTarget();
+  target.theta += deltaAzimuth;
+  target.phi = THREE.MathUtils.clamp(
+    target.phi + deltaPolar,
     0.05,
     Math.PI - 0.05
   );
-
-  camera.position.copy(controls.target).add(
-    new THREE.Vector3().setFromSpherical(spherical)
-  );
-  camera.lookAt(controls.target);
-  controls.update();
+  keyboardCameraAnimating = true;
 }
 
 function zoomCameraByKeyboard(factor){
-  const offset = camera.position.clone().sub(controls.target);
-  const currentDistance = offset.length();
-  const nextDistance = THREE.MathUtils.clamp(
-    currentDistance * factor,
+  const target = ensureKeyboardCameraTarget();
+  target.radius = THREE.MathUtils.clamp(
+    target.radius * factor,
     controls.minDistance,
     controls.maxDistance
   );
-
-  if(currentDistance > 0){
-    offset.setLength(nextDistance);
-    camera.position.copy(controls.target).add(offset);
-    camera.lookAt(controls.target);
-    controls.update();
-  }
+  keyboardCameraAnimating = true;
 }
+
+function shortestAngleDelta(from, to){
+  return THREE.MathUtils.euclideanModulo(to - from + Math.PI, Math.PI * 2) - Math.PI;
+}
+
+function cancelKeyboardCameraAnimation(){
+  keyboardCameraAnimating = false;
+  keyboardCameraTarget = null;
+}
+
+function updateKeyboardCameraAnimation(now){
+  const dt = THREE.MathUtils.clamp((now - keyboardCameraLastFrame) / 1000, 0, 0.05);
+  keyboardCameraLastFrame = now;
+  if(!keyboardCameraAnimating || !keyboardCameraTarget) return;
+
+  const current = cameraSphericalFromPosition();
+  const thetaDelta = shortestAngleDelta(current.theta, keyboardCameraTarget.theta);
+  const phiDelta = keyboardCameraTarget.phi - current.phi;
+  const radiusDelta = keyboardCameraTarget.radius - current.radius;
+  const alpha = 1 - Math.exp(-keyboardCameraSmoothing * dt);
+
+  current.theta += thetaDelta * alpha;
+  current.phi += phiDelta * alpha;
+  current.radius += radiusDelta * alpha;
+
+  const finished = Math.abs(thetaDelta) < keyboardCameraSnapEpsilon &&
+    Math.abs(phiDelta) < keyboardCameraSnapEpsilon &&
+    Math.abs(radiusDelta) < keyboardCameraSnapEpsilon;
+
+  if(finished){
+    current.copy(keyboardCameraTarget);
+    cancelKeyboardCameraAnimation();
+  }
+
+  camera.position.copy(controls.target).add(
+    new THREE.Vector3().setFromSpherical(current)
+  );
+  camera.lookAt(controls.target);
+}
+
+// A mouse or touch gesture takes priority and immediately cancels a pending
+// keyboard transition, so the camera never pulls back toward an old target.
+controls.addEventListener("start", cancelKeyboardCameraAnimation);
 
 function isKeyboardInputTarget(target){
   if(!(target instanceof Element)) return false;
@@ -1836,8 +1891,9 @@ window.addEventListener("orientationchange", layoutScene);
 /*
   Main render loop.
 */
-function loop(){
+function loop(now=performance.now()){
   requestAnimationFrame(loop);
+  updateKeyboardCameraAnimation(now);
   controls.update();
   if(fieldVisible && currentProjectionFaceSignature() !== projectionFaceSignature){
     rebuildProjections();
