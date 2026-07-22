@@ -1,0 +1,104 @@
+name: Browser-test keyboard controls
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  browser-test:
+    if: github.head_ref == 'fix/keyboard-input-guard'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/keyboard-input-guard
+
+      - name: Install Playwright Chromium
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start local server
+        run: python3 -m http.server 8000 --bind 127.0.0.1 > /tmp/cuberoller-http.log 2>&1 &
+
+      - name: Run Chromium interaction test
+        run: |
+          cat > browser-test.js <<'JS'
+          const { chromium } = require('playwright');
+          const assert = require('node:assert/strict');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true, args: ['--use-gl=swiftshader'] });
+            const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+            const pageErrors = [];
+            page.on('pageerror', error => pageErrors.push(String(error)));
+
+            await page.goto('http://127.0.0.1:8000/cube4d2.html', { waitUntil: 'networkidle' });
+            await page.waitForSelector('canvas');
+            await page.waitForSelector('button[data-number-limit="7"].active');
+
+            const activeLimit = async () => Number(await page.locator('button[data-number-limit].active').getAttribute('data-number-limit'));
+
+            assert.equal(await activeLimit(), 7, 'initial limit');
+
+            await page.locator('#sceneFrame').click({ position: { x: 40, y: 40 } });
+            await page.keyboard.press('2');
+            assert.equal(await activeLimit(), 2, 'first digit');
+            await page.keyboard.press('5');
+            assert.equal(await activeLimit(), 5, 'second digit');
+            await page.keyboard.press('1');
+            assert.equal(await activeLimit(), 1, 'third digit');
+
+            await page.keyboard.press('Numpad6');
+            assert.equal(await activeLimit(), 6, 'numpad digit');
+
+            await page.locator('button[data-number-limit="4"]').click();
+            assert.equal(await activeLimit(), 4, 'button click');
+            assert.equal(await page.evaluate(() => document.activeElement?.dataset?.numberLimit), '4', 'button focus');
+            await page.keyboard.press('3');
+            assert.equal(await activeLimit(), 3, 'digit after focused number button');
+            await page.keyboard.press('7');
+            assert.equal(await activeLimit(), 7, 'second digit after focused number button');
+
+            await page.locator('body').dispatchEvent('keydown', { code: 'Digit2', key: '2', repeat: true, bubbles: true });
+            assert.equal(await activeLimit(), 2, 'repeat keydown');
+
+            const infoBeforeInput = await page.locator('#info').textContent();
+            await page.locator('#fieldSizeInput').focus();
+            await page.keyboard.press('ArrowUp');
+            await page.keyboard.press('PageUp');
+            await page.keyboard.press('Backspace');
+            assert.equal(await page.locator('#info').textContent(), infoBeforeInput, 'input focus blocks global commands');
+            assert.equal(await activeLimit(), 2, 'input focus preserves number limit');
+
+            await page.locator('#sceneFrame').click({ position: { x: 40, y: 40 } });
+            const infoBeforeMove = await page.locator('#info').textContent();
+            await page.keyboard.press('ArrowLeft');
+            await page.waitForFunction(before => document.querySelector('#info').textContent !== before, infoBeforeMove, { timeout: 5000 });
+
+            await page.screenshot({ path: 'browser-test-keyboard-controls.png', fullPage: true });
+            assert.deepEqual(pageErrors, [], `page errors: ${pageErrors.join('\n')}`);
+            await browser.close();
+            console.log('All Chromium interaction tests passed.');
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          JS
+          set -o pipefail
+          node browser-test.js 2>&1 | tee browser-test.log
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-browser-test-evidence
+          path: |
+            browser-test.log
+            browser-test-keyboard-controls.png
+          if-no-files-found: warn
