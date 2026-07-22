@@ -64,3 +64,5 @@ for old, new in pairs:
 
 path.write_text(text, encoding='utf-8')
 print('Added number visibility controls.')
+
+# Trigger workflow.
