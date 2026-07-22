@@ -34,3 +34,4 @@ text = text.replace(
 
 path.write_text(text, encoding="utf-8")
 print("Initialized cell 7 with its stable external orientation and pending normal.")
+# Trigger the verified browser run after the workflow update.
