@@ -102,3 +102,5 @@ for old, new in [(old_comment, new_comment), (old_handler, new_handler)]:
 
 path.write_text(text, encoding="utf-8")
 print("Added keyboard camera controls.")
+
+# Trigger marker.
