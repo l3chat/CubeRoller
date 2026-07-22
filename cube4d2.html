@@ -670,6 +670,17 @@ function cloneState(s){
       external opposite = 7
 */
 function initialState(){
+  const orientations = identityOrientations();
+  // Cell 7 starts external. Its stable physical orientation is the one reached
+  // after the first closed U-D-F-B cycle: 180 degrees around local/world X.
+  orientations[7] = {x:1,y:0,z:0,w:0};
+
+  const pendingNormals = identityPendingNormals();
+  // The initial external placement is behind the forward neighbor. Treat it as
+  // having left through the corresponding +world-Z face, so its first return
+  // follows the same two-reflection rule as every later return.
+  pendingNormals[7] = {x:0,y:0,z:1};
+
   return {
     active: 0,
     axes: [
@@ -681,8 +692,8 @@ function initialState(){
     path: [0],
     moveHistory: [],
     fieldPath: [{x:0,y:0,z:0}],
-    orientations: identityOrientations(),
-    pendingNormals: identityPendingNormals(),
+    orientations,
+    pendingNormals,
     externalPositions: identityExternalPositions()
   };
 }
