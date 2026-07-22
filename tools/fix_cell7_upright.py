@@ -4,7 +4,7 @@ path = Path("cube4d2.html")
 text = path.read_text(encoding="utf-8")
 
 old = "orientations[7] = {x:1,y:0,z:0,w:0};"
-new = "orientations[7] = {x:0,y:1,z:0,w:0};"
+new = "orientations[7] = {x:0,y:0,z:0,w:1};"
 
 if new not in text:
     if text.count(old) != 1:
@@ -13,9 +13,9 @@ if new not in text:
 
 text = text.replace(
     "after the first closed U-D-F-B cycle: 180 degrees around local/world X.",
-    "after the first closed U-D-F-B cycle, corrected upright: 180 degrees around world Y.",
+    "matching all other cells: front face toward the camera and local up pointing upward.",
     1,
 )
 
 path.write_text(text, encoding="utf-8")
-print("Turned initial cell 7 upright while preserving its stable external state.")
+print("Restored cell 7 to the common initial facing while preserving its external-state normal.")
